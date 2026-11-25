@@ -1,0 +1,15 @@
+[submodule "libs/libvalinet"]
+	path = libs/libvalinet
+	url = https://github.com/valinet/libvalinet
+[submodule "libs/sws"]
+	path = libs/sws
+	url = https://github.com/valinet/sws
+[submodule "libs/zlib"]
+	path = libs/zlib
+	url = https://github.com/madler/zlib
+[submodule "ep_starttiledata"]
+	path = gr_starttiledata
+	url = https://github.com/ExplorerPatcher/ep_starttiledata
+[submodule "GR-Taskbar-L10N"]
+	path = GR-Taskbar-L10N
+	url = https://github.com/valinet/ExplorerPatcher-L10N
