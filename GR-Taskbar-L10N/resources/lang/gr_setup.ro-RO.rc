@@ -1,0 +1,15 @@
+﻿#include "resources/resource.h"
+#include "winres.h"
+
+LANGUAGE LANG_ROMANIAN, SUBLANG_ROMANIAN_ROMANIA
+
+STRINGTABLE
+BEGIN
+    IDS_SETUP_UNSUPPORTED_ARCH  "Please run the %1$s version of the setup file on %1$s devices. This setup file is only for %2$s devices."
+    IDS_SETUP_UNINSTALL_PROMPT  "Sigur doriți să dezinstalați ExplorerPatcher?"
+    IDS_SETUP_INSTALL_LOGOFF    "Pentru a finaliza instalarea, veți fi deconectat(ă) de la Windows. ExplorerPatcher va fi gata de utilizare atunci când vă veți conecta înapoi.\n\nDoriți să continuați?"
+    IDS_SETUP_UNINSTALL_LOGOFF  "Pentru a finaliza dezinstalarea, veți fi deconectat(ă) de la Windows.\n\nDoriți să continuați?"
+    IDS_SETUP_UNINSTALL_RESTART "Dispozitivul trebuie repornit pentru a finaliza dezinstalarea.\n\nDoriți să îl reporniți acum?"
+    IDS_SETUP_UNINSTALL_FINISH  "Dezinstalarea s-a încheiat cu succes. Vă mulțumim pentru că ați utilizat ExplorerPatcher."
+    IDS_SETUP_FAILED            "A apărut o eroare la servisarea lui ExplorerPatcher.\nAcest lucru este cel mai probabil cauzat de unul sau mai multe dintre fișierele unei versiune anterioare încă în uz. Deblocarea fișierelor ar trebui să rezolve această problemă.\n\nPași de depanare:\n• Închideți și redeschideți fereastra ""Proprietăți"", dacă aceasta este deschisă la momentul curent.\n• Închideți și apoi reporniți toate procesele ""explorer.exe"".\n• Dacă ați înregistrat ExplorerPatcher ca extensie shell, atunci repornirea dispozitivului cel mai probabil va rezolva problema.\n• În cele din urmă, reporniți computerul și încercați din nou."
+END
