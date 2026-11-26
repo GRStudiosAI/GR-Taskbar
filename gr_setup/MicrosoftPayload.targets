@@ -1,50 +1,186 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <!-- Retain the existing pinned Microsoft payload versions. Cache outside the
-       disposable packaging folder and verify every reuse before packaging. -->
+
+  <!-- GR Taskbar Microsoft dependency management -->
+
   <ItemGroup Condition="'$(Platform)' == 'x64'">
+
     <GRMicrosoftPayload Include="$(MSBuildProjectDirectory)\..\build\dependency-cache\x64\pnidui\pnidui.dll">
       <Category>pnidui</Category>
       <SourceUrl>https://msdl.microsoft.com/download/symbols/pnidui.dll/F717CABC20B000/pnidui.dll</SourceUrl>
       <ExpectedSHA256>52E9C88CB50EF98E683839AB62880180F0DD3DB3E1C445EA461AE63D97A349D3</ExpectedSHA256>
+      <ExpectedMachine>34404</ExpectedMachine>
     </GRMicrosoftPayload>
+
     <GRMicrosoftPayload Include="$(MSBuildProjectDirectory)\..\build\dependency-cache\x64\StartUI\StartUI.dll">
       <Category>StartUI</Category>
       <SourceUrl>https://msdl.microsoft.com/download/symbols/startui.dll/C1AEED44852000/startui.dll</SourceUrl>
       <ExpectedSHA256>715B75B289DD2EFC34FB0FFD924FCD38A34FEE9FC5E93A207FCADA7CB38F6508</ExpectedSHA256>
+      <ExpectedMachine>34404</ExpectedMachine>
     </GRMicrosoftPayload>
+
     <GRMicrosoftPayload Include="$(MSBuildProjectDirectory)\..\build\dependency-cache\x64\JumpViewUI\JumpViewUI.dll">
       <Category>JumpViewUI</Category>
       <SourceUrl>https://msdl.microsoft.com/download/symbols/jumpviewui.dll/C814664216A000/jumpviewui.dll</SourceUrl>
       <ExpectedSHA256>3E81CECF171D697DBF08E97CDC0ED60158D6FB405E9897D54890CF20E35EF856</ExpectedSHA256>
+      <ExpectedMachine>34404</ExpectedMachine>
     </GRMicrosoftPayload>
+
   </ItemGroup>
+
   <ItemGroup Condition="'$(Platform)' == 'ARM64'">
+
     <GRMicrosoftPayload Include="$(MSBuildProjectDirectory)\..\build\dependency-cache\ARM64\pnidui\pnidui.dll">
       <Category>pnidui</Category>
       <SourceUrl>https://msdl.microsoft.com/download/symbols/pnidui.dll/63AF842D210000/pnidui.dll</SourceUrl>
+      <ExpectedSHA256></ExpectedSHA256>
+      <ExpectedMachine>43620</ExpectedMachine>
     </GRMicrosoftPayload>
+
     <GRMicrosoftPayload Include="$(MSBuildProjectDirectory)\..\build\dependency-cache\ARM64\StartUI\StartUI.dll">
       <Category>StartUI</Category>
       <SourceUrl>https://msdl.microsoft.com/download/symbols/startui.dll/122A50F3AB9000/startui.dll</SourceUrl>
+      <ExpectedSHA256></ExpectedSHA256>
+      <ExpectedMachine>43620</ExpectedMachine>
     </GRMicrosoftPayload>
+
     <GRMicrosoftPayload Include="$(MSBuildProjectDirectory)\..\build\dependency-cache\ARM64\JumpViewUI\JumpViewUI.dll">
       <Category>JumpViewUI</Category>
       <SourceUrl>https://msdl.microsoft.com/download/symbols/jumpviewui.dll/45558FDB1E9000/jumpviewui.dll</SourceUrl>
+      <ExpectedSHA256></ExpectedSHA256>
+      <ExpectedMachine>43620</ExpectedMachine>
     </GRMicrosoftPayload>
+
   </ItemGroup>
-  <Target Name="AcquireGRMicrosoftPayload" Condition="'$(Platform)' == 'x64' Or '$(Platform)' == 'ARM64'">
-    <MakeDir Directories="@(GRMicrosoftPayload->'%(RootDir)%(Directory)')" />
-    <DownloadFile SourceUrl="%(GRMicrosoftPayload.SourceUrl)"
+
+  <Target Name="AcquireGRMicrosoftPayload"
+          Condition="'$(Platform)' == 'x64' Or '$(Platform)' == 'ARM64'">
+
+    <Message Importance="high"
+             Text="GR Taskbar: Acquiring Microsoft $(Platform) dependencies." />
+
+    <MakeDir
+      Directories="@(GRMicrosoftPayload->'%(RootDir)%(Directory)')" />
+
+    <DownloadFile
+      SourceUrl="%(GRMicrosoftPayload.SourceUrl)"
       DestinationFolder="%(GRMicrosoftPayload.RootDir)%(GRMicrosoftPayload.Directory)"
       DestinationFileName="%(GRMicrosoftPayload.Filename)%(GRMicrosoftPayload.Extension)"
-      Condition="!Exists('%(GRMicrosoftPayload.Identity)')" Retries="8" RetryDelayMilliseconds="15000" />
-    <GetFileHash Files="@(GRMicrosoftPayload)" Algorithm="SHA256">
-      <Output TaskParameter="Items" ItemName="GRCheckedMicrosoftPayload" />
+      Condition="!Exists('%(GRMicrosoftPayload.Identity)')"
+      Retries="8"
+      RetryDelayMilliseconds="15000" />
+
+    <Error
+      Condition="!Exists('%(GRMicrosoftPayload.Identity)')"
+      Text="Required Microsoft dependency is missing: %(GRMicrosoftPayload.Identity)" />
+
+    <GetFileHash
+      Files="@(GRMicrosoftPayload)"
+      Algorithm="SHA256">
+
+      <Output
+        TaskParameter="Items"
+        ItemName="GRCheckedMicrosoftPayload" />
+
     </GetFileHash>
-    <Error Condition="'%(GRCheckedMicrosoftPayload.ExpectedSHA256)' != '' And '%(GRCheckedMicrosoftPayload.FileHash)' != '%(GRCheckedMicrosoftPayload.ExpectedSHA256)'"
-      Text="Microsoft payload integrity check failed: %(GRCheckedMicrosoftPayload.Identity). Build stopped; the cached file was not packaged." />
-    <Exec Condition="'$(Platform)' == 'ARM64'" Command="powershell.exe -NoProfile -NonInteractive -Command &quot;$ErrorActionPreference = 'Stop'; $p = '%(GRMicrosoftPayload.FullPath)'; $sig = Get-AuthenticodeSignature -LiteralPath $p; if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation(?:,|$)') { throw ('Microsoft signature validation failed: ' + $p) }; $b = [IO.File]::ReadAllBytes($p); $o = [BitConverter]::ToInt32($b,60); if ([BitConverter]::ToUInt32($b,$o) -ne 17744 -or [BitConverter]::ToUInt16($b,$o+4) -ne 43620) { throw ('Expected ARM64 PE: ' + $p) }&quot;" />
-    <Copy SourceFiles="@(GRMicrosoftPayload)"
+
+    <Message
+      Importance="high"
+      Text="Microsoft dependency: %(GRCheckedMicrosoftPayload.Identity) SHA256: %(GRCheckedMicrosoftPayload.FileHash)" />
+
+    <Error
+      Condition="'%(GRCheckedMicrosoftPayload.ExpectedSHA256)' != '' And '%(GRCheckedMicrosoftPayload.FileHash)' != '%(GRCheckedMicrosoftPayload.ExpectedSHA256)'"
+      Text="Microsoft dependency SHA256 mismatch: %(GRCheckedMicrosoftPayload.Identity). Expected: %(GRCheckedMicrosoftPayload.ExpectedSHA256). Actual: %(GRCheckedMicrosoftPayload.FileHash)." />
+
+    <Exec
+      Command="powershell.exe -NoProfile -NonInteractive -Command &quot;
+        $ErrorActionPreference = 'Stop';
+        $p = '%(GRMicrosoftPayload.FullPath)';
+        $expected = %(GRMicrosoftPayload.ExpectedMachine);
+        $expectedHash = '%(GRMicrosoftPayload.ExpectedSHA256)';
+
+        Write-Host ('Validating Microsoft dependency: ' + $p);
+
+        if (-not (Test-Path -LiteralPath $p -PathType Leaf)) {
+          throw ('Dependency does not exist: ' + $p)
+        };
+
+        $b = [System.IO.File]::ReadAllBytes($p);
+
+        if ($b.Length -lt 64) {
+          throw ('Invalid or truncated dependency: ' + $p)
+        };
+
+        if ([BitConverter]::ToUInt16($b, 0) -ne 23117) {
+          throw ('Invalid DOS header: ' + $p)
+        };
+
+        $o = [BitConverter]::ToInt32($b, 60);
+
+        if ($o -lt 64 -or $o -gt ($b.Length - 24)) {
+          throw ('Invalid PE header offset: ' + $p)
+        };
+
+        if ([BitConverter]::ToUInt32($b, $o) -ne 17744) {
+          throw ('Invalid PE signature: ' + $p)
+        };
+
+        $machine = [BitConverter]::ToUInt16($b, $o + 4);
+
+        Write-Host ('Detected PE machine: 0x{0:X4}' -f $machine);
+        Write-Host ('Expected PE machine: 0x{0:X4}' -f $expected);
+
+        if ($machine -ne $expected) {
+          throw ('Microsoft dependency architecture mismatch: ' + $p)
+        };
+
+        $hash = (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash;
+
+        Write-Host ('SHA256: ' + $hash);
+
+        if ($expectedHash) {
+          if ($hash -ne $expectedHash) {
+            throw ('Microsoft dependency hash mismatch: ' + $p)
+          };
+          Write-Host 'Pinned SHA256 validation passed.';
+        }
+        else {
+          $sig = Get-AuthenticodeSignature -LiteralPath $p;
+
+          Write-Host ('Signature status: ' + $sig.Status);
+          Write-Host ('Signature message: ' + $sig.StatusMessage);
+          Write-Host ('Signature type: ' + $sig.SignatureType);
+
+          if ($null -eq $sig.SignerCertificate) {
+            throw ('No signer certificate available for: ' + $p)
+          };
+
+          $subject = $sig.SignerCertificate.Subject;
+
+          Write-Host ('Signer: ' + $subject);
+          Write-Host ('Certificate thumbprint: ' + $sig.SignerCertificate.Thumbprint);
+
+          if ($sig.Status -ne 'Valid') {
+            throw ('Microsoft signature validation failed: ' + $sig.Status + ' - ' + $sig.StatusMessage)
+          };
+
+          if ($subject -notmatch '(?:^|,)\s*O\s*=\s*Microsoft Corporation\s*(?:,|$)') {
+            throw ('Unexpected dependency publisher: ' + $subject)
+          };
+
+          Write-Host 'Microsoft Authenticode validation passed.';
+        };
+
+        Write-Host ('Microsoft dependency validation completed: ' + $p);
+      &quot;" />
+
+    <Copy
+      SourceFiles="@(GRMicrosoftPayload)"
       DestinationFiles="@(GRMicrosoftPayload->'$(MSBuildProjectDirectory)\..\build\$(Configuration)\$(Platform)\gr_setup_files\%(Category)\%(Filename)%(Extension)')" />
+
+    <Message
+      Importance="high"
+      Text="GR Taskbar: Microsoft $(Platform) dependencies successfully validated and staged." />
+
   </Target>
+
 </Project>
