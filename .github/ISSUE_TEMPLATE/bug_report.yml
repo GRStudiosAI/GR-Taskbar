@@ -1,5 +1,5 @@
 name: Bug report
-description: Report the issue you have with ExplorerPatcher here
+description: Report the issue you have with GR Taskbar here
 labels:
   - bug
 body:
@@ -14,17 +14,17 @@ body:
       label: Before reporting your issue
       description: Please ensure you meet the following criteria before reporting issues
       options:
-        - label: I have confirmed that this issue does not happen when ExplorerPatcher is not installed
+        - label: I have confirmed that this issue does not happen when GR Taskbar is not installed
         - label: I do not have "register as shell extension" enabled
         - label: I have tried my best to check existing issues
 
   - type: textarea
     attributes:
-      label: Repro ExplorerPatcher versions
-      description: Provide the relevant versions of ExplorerPatcher for reproduction of the issue.
+      label: Repro GR Taskbar versions
+      description: Provide the relevant versions of GR Taskbar for reproduction of the issue.
       placeholder: |
         Example:
-        ExplorerPatcher 67.1
+        GR Taskbar 67.1
     validations:
       required: true
 
@@ -56,11 +56,11 @@ body:
   - type: textarea
     attributes:
       label: Describe the bug
-      description: A clear and concise description of what the bug is. Please try to isolate the issue to ExplorerPatcher by disabling other customization software.
+      description: A clear and concise description of what the bug is. Please try to isolate the issue to GR Taskbar by disabling other customization software.
       placeholder: |
         Example:
         1. Install EP 67.1.
-        2. Enable Windows 10 (ExplorerPatcher) taskbar and restart Explorer.
+        2. Enable Windows 10 (GR Taskbar) taskbar and restart Explorer.
         3. Make sure Ethernet (if available) is disconnected, and then disconnect Wi-Fi.
         4. Turn on Personal Hotspot (iPhone) or Mobile Hotspot (Android).
         5. Connect to the Personal Hotspot.
