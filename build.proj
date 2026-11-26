@@ -22,4 +22,7 @@
         <MSBuild Projects="GR-Taskbar.sln" Properties="Configuration=$(Configuration);Platform=IA-32" />
         <MSBuild Projects="@(BaseEPsToBuild)" BuildInParallel="true" />
     </Target>
+    <Target Name="BuildSigned">
+        <Exec Command="powershell.exe -NoProfile -File &quot;$(MSBuildThisFileDirectory)scripts\Build-GRTaskbar.ps1&quot; -SigningMode SelfSigned" />
+    </Target>
 </Project>

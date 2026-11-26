@@ -30,6 +30,8 @@ static const EPThemeField epThemeFields[] = {
     EP_ADV_FIELD("Taskbar", "MMTaskbarGlomLevel", 0, 2),
     EP_ADV_FIELD("Taskbar", "ShowTaskViewButton", 1, 1),
     EP_FIELD("StartIcon", "OrbStyle", 0, 5),
+    EP_FIELD("StartIcon", "StartIconSizeMode", 0, 4),
+    EP_FIELD("StartIcon", "StartIconCustomSize", 24, 48),
     EP_FIELD("Explorer", "DisableWindows11ContextMenu", 0, 1),
     EP_FIELD("Explorer", "LegacyFileTransferDialog", 0, 1),
     EP_FIELD("Explorer", "UseClassicDriveGrouping", 0, 1),
@@ -145,6 +147,7 @@ static BOOL ThemeApplyFile(HWND owner, PCWSTR file, BOOL undo)
         WCHAR raw[64];
         if (!GetPrivateProfileStringW(field->group, field->key, L"", raw, ARRAYSIZE(raw), file)) continue;
         if (!ThemeReadNumber(file, field->group, field->key, &values[i]) || values[i] > field->maximum) goto invalid;
+        if (!wcscmp(field->key, GR_START_ICON_CUSTOM_SIZE) && values[i] < GR_START_ICON_MIN_SIZE) goto invalid;
         included[i] = TRUE;
         present[i] = 1;
         WCHAR name[MAX_PATH];

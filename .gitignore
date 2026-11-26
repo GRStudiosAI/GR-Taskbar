@@ -357,3 +357,9 @@ MigrationBackup/
 
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
+
+# Private signing material stays outside the repository.
+*.pfx
+*.p12
+*.key
+GR-Taskbar.Build.local.psd1

@@ -68,8 +68,8 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
-            VALUE "CompanyName", "GR Studios"
-            VALUE "FileDescription", "GR Taskbar Settings"
+            VALUE "CompanyName", "GR Studios AI LLC"
+            VALUE "FileDescription", "GR Settings"
             VER_FILE_STRING
             VALUE "InternalName", "ep_gui.dll"
             VALUE "LegalCopyright", "Copyright (C) 2006-2026 VALINET Solutions SRL. All rights reserved."
@@ -89,6 +89,8 @@ END
 //
 // RCDATA
 //
+
+IDI_GR_TASKBAR ICON "resources\gr-taskbar.ico"
 
 IDR_REGISTRY1           RCDATA                  "resources\settings.reg"
 IDR_REGISTRY2           RCDATA                  "resources\settings10.reg"

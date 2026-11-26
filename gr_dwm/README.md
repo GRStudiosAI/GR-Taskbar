@@ -25,4 +25,3 @@ To unregister, type these commands in an elevated command window:
 sc.exe stop ep_dwm
 sc.exe delete ep_dwm
 ```
-

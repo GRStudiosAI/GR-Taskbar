@@ -1183,12 +1183,10 @@ BOOL InstallUpdatesIfAvailable(
     wprintf(L"[Updates] Path to module: %s\n", dllName);
 
     CHAR hash[100] = {};
-    GetHardcodedHash(dllName, hash, 100);
-    if (!strcmp(hash, "This"))
-        ComputeFileHash2(hModule, dllName, hash, 100);
-    else
-        printf("[Updates] Using hardcoded hash.\n");
-
+    // Installed copies are byte-identical to the signed payload. Never patch a
+    // signed DLL's DOS header to store the installer identity.
+    if (ComputeFileHash2(hModule, dllName, hash, sizeof(hash)) != ERROR_SUCCESS)
+        return FALSE;
     BOOL bFail = FALSE, bReturnValue = FALSE;
     dwLeftMost = 0; dwSecondLeft = 0; dwSecondRight = 0; dwRightMost = 0;
     if (IsUpdateAvailable(_T(REGPATH), hash, &bFail, wszInfoURL, MAX_PATH, hModule, &dwLeftMost, &dwSecondLeft, &dwSecondRight, &dwRightMost))

@@ -15,111 +15,58 @@ processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 #endif
 #pragma comment(lib, "zs.lib")
 
+#include "Servicing.h"
+#include "InstallerBranding.h"
+
 static UINT g_uFailureLine;
 
-#define CHECK_OK(x) ((!x && !g_uFailureLine) ? (g_uFailureLine = __LINE__) : (void)0, (x))
+#define CHECK_OK(x) ((!(x) && !g_uFailureLine) ? (g_uFailureLine = __LINE__, GRFail(L"servicing step", wszPath, GetLastError())) : (x))
 
-BOOL SetupShortcut(BOOL bInstall, WCHAR* wszPath, WCHAR* wszArguments)
+static BOOL GRRestartShell(HANDLE token)
 {
-    WCHAR wszTitle[MAX_PATH];
-    ZeroMemory(wszTitle, MAX_PATH);
-    WCHAR wszExplorerPath[MAX_PATH];
-    ZeroMemory(wszExplorerPath, MAX_PATH);
-    GetSystemDirectoryW(wszExplorerPath, MAX_PATH);
-    wcscat_s(wszExplorerPath, MAX_PATH, L"\\ExplorerFrame.dll");
-    if (bInstall)
-    {
-        HMODULE hExplorerFrame = LoadLibraryExW(wszExplorerPath, NULL, LOAD_LIBRARY_AS_DATAFILE);
-        if (hExplorerFrame)
-        {
-            LoadStringW(hExplorerFrame, 50222, wszTitle, 260); // 726 = File Explorer
-            wchar_t* p = wcschr(wszTitle, L'(');
-            if (p)
-            {
-                p--;
-                if (*p == L' ')
-                {
-                    *p = 0;
-                }
-                else
-                {
-                    p++;
-                    *p = 0;
-                }
-            }
-            if (wszTitle[0] == 0)
-            {
-                wcscat_s(wszTitle, MAX_PATH, _T(PRODUCT_DISPLAY_NAME));
-            }
+    if (!grStoppedShell) return TRUE;
+    if (!FindWindowW(L"Shell_TrayWnd", NULL)) StartExplorerWithDelay(250, token);
+    for (UINT attempt = 0; attempt < 40; ++attempt) {
+        HWND tray = FindWindowW(L"Shell_TrayWnd", NULL); DWORD_PTR result;
+        if (tray && SendMessageTimeoutW(tray, WM_NULL, 0, 0, SMTO_ABORTIFHUNG, 250, &result)) {
+            GRLog(L"Explorer taskbar restarted and responding", L"explorer.exe", 0);
+            grStoppedShell = FALSE; return TRUE;
         }
-        else
-        {
-            wcscat_s(wszTitle, MAX_PATH, _T(PRODUCT_DISPLAY_NAME));
-        }
+        Sleep(250);
     }
-    BOOL bOk = FALSE;
-    if (bInstall) wcscpy_s(wszTitle, MAX_PATH, L"GR Taskbar Settings");
-    WCHAR wszStartPrograms[MAX_PATH + 1];
-    ZeroMemory(wszStartPrograms, MAX_PATH + 1);
-    SHGetFolderPathW(NULL, CSIDL_COMMON_PROGRAMS, NULL, SHGFP_TYPE_CURRENT, wszStartPrograms);
-    wcscat_s(wszStartPrograms, MAX_PATH + 1, L"\\" _T(PRODUCT_DISPLAY_NAME));
-    wszStartPrograms[wcslen(wszStartPrograms) + 1] = 0;
-    SHFILEOPSTRUCTW op;
-    ZeroMemory(&op, sizeof(SHFILEOPSTRUCTW));
-    op.wFunc = FO_DELETE;
-    op.pFrom = wszStartPrograms;
-    op.fFlags = FOF_NO_UI;
-    bOk = SHFileOperationW(&op);
-    bOk = !bOk;
-    if (bInstall)
-    {
-        if (!CreateDirectoryW(wszStartPrograms, NULL))
-        {
-            return FALSE;
-        }
-    }
-    else
-    {
-        return bOk;
-    }
-    wcscat_s(wszStartPrograms, MAX_PATH, L"\\");
-    wcscat_s(wszStartPrograms, MAX_PATH, wszTitle);
-    wcscat_s(wszStartPrograms, MAX_PATH, L" (");
-    wcscat_s(wszStartPrograms, MAX_PATH, _T(PRODUCT_DISPLAY_NAME) L").lnk");
-    ZeroMemory(wszExplorerPath, MAX_PATH);
-    GetSystemDirectoryW(wszExplorerPath, MAX_PATH);
-    wcscat_s(wszExplorerPath, MAX_PATH, L"\\shell32.dll");
-    if (bInstall)
-    {
-        if (SUCCEEDED(CoInitialize(0)))
-        {
-            IShellLinkW* pShellLink = NULL;
-            if (SUCCEEDED(CoCreateInstance(&CLSID_ShellLink, NULL, CLSCTX_INPROC, &IID_IShellLinkW, &pShellLink)))
-            {
-                pShellLink->lpVtbl->SetPath(pShellLink, wszPath);
-                pShellLink->lpVtbl->SetArguments(pShellLink, wszArguments);
-                pShellLink->lpVtbl->SetIconLocation(pShellLink, wszExplorerPath, 40 - 1);
-                PathRemoveFileSpecW(wszExplorerPath);
-                pShellLink->lpVtbl->SetWorkingDirectory(pShellLink, wszExplorerPath);
-                pShellLink->lpVtbl->SetDescription(pShellLink, _T(PRODUCT_DISPLAY_NAME));
-
-                IPersistFile* pPersistFile = NULL;
-                if (SUCCEEDED(pShellLink->lpVtbl->QueryInterface(pShellLink, &IID_IPersistFile, &pPersistFile)))
-                {
-                    if (SUCCEEDED(pPersistFile->lpVtbl->Save(pPersistFile, wszStartPrograms, TRUE)))
-                    {
-                        bOk = TRUE;
-                    }
-                    pPersistFile->lpVtbl->Release(pPersistFile);
-                }
-                pShellLink->lpVtbl->Release(pShellLink);
-            }
-            CoUninitialize();
-        }
-    }
-    return bOk;
+    return GRFail(L"verify Explorer restart", L"explorer.exe", ERROR_TIMEOUT);
 }
-
+BOOL SetupShortcut(BOOL install, WCHAR* application, WCHAR* arguments)
+{
+    WCHAR directory[MAX_PATH], path[MAX_PATH], staged[MAX_PATH], icon[MAX_PATH];
+    if (FAILED(SHGetFolderPathW(NULL, CSIDL_COMMON_PROGRAMS, NULL, SHGFP_TYPE_CURRENT, directory)))
+        return GRFail(L"locate Start menu Programs folder", L"", ERROR_PATH_NOT_FOUND);
+    wcscat_s(directory, MAX_PATH, L"\\GR Taskbar");
+    swprintf_s(path, MAX_PATH, L"%s\\GR Taskbar Settings (GR Taskbar).lnk", directory);
+    if (!install) return GRPublishFile(path, NULL, TRUE);
+    if (!CreateDirectoryW(directory, NULL) && GetLastError() != ERROR_ALREADY_EXISTS)
+        return GRFail(L"create shortcut directory", directory, GetLastError());
+    if (!GRUniqueSibling(path, staged)) return GRFail(L"create staged shortcut", path, GetLastError());
+    HRESULT apartment = CoInitialize(NULL), result = apartment;
+    IShellLinkW* link = NULL; IPersistFile* persist = NULL;
+    if (SUCCEEDED(apartment) || apartment == RPC_E_CHANGED_MODE) {
+        result = CoCreateInstance(&CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, &IID_IShellLinkW, (void**)&link);
+        if (SUCCEEDED(result)) result = link->lpVtbl->SetPath(link, application);
+        if (SUCCEEDED(result)) result = link->lpVtbl->SetArguments(link, arguments);
+        swprintf_s(icon, MAX_PATH, L"%s\\ep_gui.dll", grInstallRoot);
+        if (SUCCEEDED(result)) result = link->lpVtbl->SetIconLocation(link, icon, 0);
+        if (SUCCEEDED(result)) result = link->lpVtbl->SetDescription(link, L"GR Taskbar settings");
+        if (SUCCEEDED(result)) result = link->lpVtbl->QueryInterface(link, &IID_IPersistFile, (void**)&persist);
+        if (SUCCEEDED(result)) result = persist->lpVtbl->Save(persist, staged, TRUE);
+    }
+    if (persist) persist->lpVtbl->Release(persist);
+    if (link) link->lpVtbl->Release(link);
+    if (SUCCEEDED(apartment)) CoUninitialize();
+    BOOL ok = SUCCEEDED(result) ? GRPublishFile(path, staged, FALSE) :
+        GRFail(L"create ShellLink (HRESULT logged)", path, (DWORD)result);
+    if (GetFileAttributesW(staged) != INVALID_FILE_ATTRIBUTES) DeleteFileW(staged);
+    return ok;
+}
 BOOL SetupUninstallEntry(BOOL bInstall, WCHAR* wszPath)
 {
     DWORD dwLastError = ERROR_SUCCESS;
@@ -301,58 +248,15 @@ BOOL SetupUninstallEntry(BOOL bInstall, WCHAR* wszPath)
      }
      if (bInstall && !dwLastError)
      {
-         // GR Studios migration: keep one app listing and preserve the old
-         // installation as a rollback backup after the new files are installed.
+         // GR Studios AI LLC product and support links.
          PCWSTR currentEntry = L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\" _T(EP_CLSID) L"_" _T(PRODUCT_NAME);
          RegSetKeyValueW(HKEY_LOCAL_MACHINE, currentEntry, L"URLInfoAbout", REG_SZ,
              _T(PRODUCT_WEBSITE), sizeof(_T(PRODUCT_WEBSITE)));
          RegSetKeyValueW(HKEY_LOCAL_MACHINE, currentEntry, L"HelpLink", REG_SZ,
              _T(PRODUCT_WEBSITE), sizeof(_T(PRODUCT_WEBSITE)));
-         RegDeleteTreeW(HKEY_LOCAL_MACHINE,
-             L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\" _T(EP_CLSID) L"_ExplorerPatcher");
-         const PCWSTR registration[] = {
-             L"SOFTWARE\\Classes\\CLSID\\" _T(EP_CLSID),
-             L"SOFTWARE\\Classes\\WOW6432Node\\CLSID\\" _T(EP_CLSID)
-         };
-         for (UINT index = 0; index < ARRAYSIZE(registration); ++index)
-         {
-             WCHAR key[MAX_PATH], registered[MAX_PATH];
-             wcscpy_s(key, ARRAYSIZE(key), registration[index]); PathAppendW(key, L"InProcServer32");
-             DWORD bytes = sizeof(registered);
-             if (RegGetValueW(HKEY_LOCAL_MACHINE, key, NULL, RRF_RT_REG_SZ, NULL, registered, &bytes) == ERROR_SUCCESS &&
-                 StrStrIW(registered, L"ExplorerPatcher"))
-             {
-                 WCHAR replacement[MAX_PATH];
-                 SHGetFolderPathW(NULL, SPECIAL_FOLDER, NULL, SHGFP_TYPE_CURRENT, replacement);
-                 PathAppendW(replacement, _T(PRODUCT_NAME));
-#if defined(_M_ARM64)
-                 PathAppendW(replacement, index ? _T(PRODUCT_NAME) L".IA-32.dll" : _T(PRODUCT_NAME) L".arm64.dll");
-#else
-                 PathAppendW(replacement, index ? _T(PRODUCT_NAME) L".IA-32.dll" : _T(PRODUCT_NAME) L".amd64.dll");
-#endif
-                 RegSetKeyValueW(HKEY_LOCAL_MACHINE, key, NULL, REG_SZ, replacement, (DWORD)((wcslen(replacement) + 1) * sizeof(WCHAR)));
-                 RegSetKeyValueW(HKEY_LOCAL_MACHINE, registration[index], NULL, REG_SZ, _T(PRODUCT_DISPLAY_NAME), sizeof(_T(PRODUCT_DISPLAY_NAME)));
-             }
-         }
-         WCHAR legacy[MAX_PATH], backup[MAX_PATH];
-         if (SUCCEEDED(SHGetFolderPathW(NULL, SPECIAL_FOLDER, NULL, SHGFP_TYPE_CURRENT, legacy)))
-         {
-             wcscpy_s(backup, ARRAYSIZE(backup), legacy);
-             PathAppendW(legacy, L"ExplorerPatcher");
-             PathAppendW(backup, L"GR-Taskbar\\LegacyProgramBackup");
-             MoveFileW(legacy, backup);
-         }
-         if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_COMMON_PROGRAMS, NULL, SHGFP_TYPE_CURRENT, legacy)))
-         {
-             PathAppendW(legacy, L"ExplorerPatcher");
-             if (SUCCEEDED(SHGetFolderPathW(NULL, SPECIAL_FOLDER, NULL, SHGFP_TYPE_CURRENT, backup)))
-             {
-                 PathAppendW(backup, L"GR-Taskbar\\LegacyShortcutBackup");
-                 MoveFileW(legacy, backup);
-             }
-         }
      }
-     return !dwLastError;
+     if (dwLastError) return GRFail(L"update uninstall registration", wszPath, dwLastError);
+     return TRUE;
 }
 
 typedef struct
@@ -538,116 +442,54 @@ unzFile LoadZipFileFromResources(MemoryBuffer** outMem)
     return unzOpen2_64(NULL, &fileFunc);
 }
 
-int g_cleanupFileCounter = 1;
-
-// %APPDATA%\ExplorerPatcher\cleanup\<PID>_<counter>.tmp
-BOOL StageFileForCleanup(const WCHAR* wszProblematicFilePath)
-{
-    WCHAR wszPath[MAX_PATH];
-    SHGetFolderPathW(NULL, CSIDL_APPDATA, NULL, SHGFP_TYPE_CURRENT, wszPath);
-    wcscat_s(wszPath, MAX_PATH, L"\\GR-Taskbar\\cleanup");
-    CreateDirectoryW(wszPath, NULL);
-
-    wcscat_s(wszPath, MAX_PATH, L"\\");
-    WCHAR wszPID[10];
-    _itow_s(GetCurrentProcessId(), wszPID, ARRAYSIZE(wszPID), 10);
-    wcscat_s(wszPath, MAX_PATH, wszPID);
-    wcscat_s(wszPath, MAX_PATH, L"_");
-    WCHAR wszCounter[10];
-    _itow_s(g_cleanupFileCounter++, wszCounter, ARRAYSIZE(wszCounter), 10);
-    wcscat_s(wszPath, MAX_PATH, wszCounter);
-    wcscat_s(wszPath, MAX_PATH, L".tmp");
-
-    return MoveFileW(wszProblematicFilePath, wszPath);
-}
-
+// No live file is deleted until its replacement is complete and recoverable.
 __declspec(noinline) BOOL InstallResourceHelper(BOOL bInstall, HMODULE hModule, unzFile zipFile, const WCHAR* wszPath)
 {
-    WCHAR wszReplace[MAX_PATH];
-    wcscpy_s(wszReplace, MAX_PATH, wszPath);
-    PathRemoveExtensionW(wszReplace);
-    wcscat_s(wszReplace, MAX_PATH, L".prev");
-    BOOL bFileExists = PathFileExistsW(wszPath);
-    BOOL bPrevExists = PathFileExistsW(wszReplace);
-    if (bFileExists || bPrevExists)
-    {
-        BOOL bRet = !bPrevExists || DeleteFileW(wszReplace);
-        if (bRet || (!bRet && GetLastError() == ERROR_FILE_NOT_FOUND))
-        {
-            if (bFileExists && !DeleteFileW(wszPath) && !StageFileForCleanup(wszPath))
-            {
-                return FALSE;
+    if (!GRValidateTarget(wszPath)) return FALSE;
+    if (!bInstall) return GRPublishFile(wszPath, NULL, TRUE);
+    WCHAR staged[MAX_PATH] = L"";
+    if (!GRUniqueSibling(wszPath, staged)) return GRFail(L"create staging file", wszPath, GetLastError());
+    BOOL ok = FALSE;
+    if (!zipFile) {
+        WCHAR source[MAX_PATH];
+        if (!GetModuleFileNameW(hModule, source, MAX_PATH)) GRFail(L"GetModuleFileNameW", wszPath, GetLastError());
+        else if (!_wcsicmp(source, wszPath)) { DeleteFileW(staged); return TRUE; }
+        else if (!CopyFileW(source, staged, FALSE)) GRFail(L"copy installer to staging", source, GetLastError());
+        else {
+            HANDLE copy = CreateFileW(staged, GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+            if (copy == INVALID_HANDLE_VALUE) GRFail(L"open staged installer", staged, GetLastError());
+            else {
+                ok = FlushFileBuffers(copy);
+                if (!ok) GRFail(L"flush staged installer", staged, GetLastError());
+                CloseHandle(copy);
             }
         }
-        else
-        {
-            return FALSE;
-        }
-    }
-    if (!zipFile)
-    {
-        if (bInstall)
-        {
-            wchar_t path[MAX_PATH];
-            GetModuleFileNameW(hModule, path, MAX_PATH);
-            if (_wcsicmp(path, wszPath) != 0)
-            {
-                return CopyFileW(path, wszPath, FALSE);
-            }
-        }
-        return TRUE;
-    }
-
-    if (!bInstall)
-    {
-        return TRUE;
-    }
-
-    unz_file_info64 fileInfo = { 0 };
-    // Caller (InstallResource) has already called unzOpenCurrentFile
-    if (unzGetCurrentFileInfo64(zipFile, &fileInfo, NULL, 0, NULL, 0, NULL, 0) != UNZ_OK)
-    {
-        return FALSE;
-    }
-
-    BOOL bRet = FALSE;
-    void* pRscr = malloc(fileInfo.uncompressed_size);
-    DWORD cbRscr = (DWORD)fileInfo.uncompressed_size;
-    if (pRscr)
-    {
-        if (unzReadCurrentFile(zipFile, pRscr, cbRscr) == cbRscr)
-        {
-            HANDLE hFile = CreateFileW(wszPath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-            if (hFile)
-            {
-                DWORD dwNumberOfBytesWritten = 0;
-                int offset = 0;
-                wchar_t wszDxgi[MAX_PATH];
-                if (GetWindowsDirectoryW(wszDxgi, MAX_PATH))
-                {
-                    wcscat_s(wszDxgi, MAX_PATH, L"\\dxgi.dll");
-                    if (!wcscmp(wszPath, wszDxgi))
-                    {
-                        WCHAR wszOwnPath[MAX_PATH];
-                        GetModuleFileNameW(GetModuleHandle(NULL), wszOwnPath, MAX_PATH);
-                        CHAR hash[100];
-                        GetHardcodedHash(wszOwnPath, hash, 100);
-                        WriteFile(hFile, pRscr, DOSMODE_OFFSET, &dwNumberOfBytesWritten, NULL);
-                        offset += dwNumberOfBytesWritten;
-                        WriteFile(hFile, hash, 32, &dwNumberOfBytesWritten, NULL);
-                        offset += dwNumberOfBytesWritten;
+    } else {
+        unz_file_info64 info = { 0 };
+        if (unzGetCurrentFileInfo64(zipFile, &info, NULL, 0, NULL, 0, NULL, 0) != UNZ_OK || info.uncompressed_size > MAXDWORD)
+            GRFail(L"read archive entry metadata", wszPath, ERROR_INVALID_DATA);
+        else {
+            HANDLE file = CreateFileW(staged, GENERIC_WRITE, 0, NULL, TRUNCATE_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+            if (file == INVALID_HANDLE_VALUE) GRFail(L"open staged file", staged, GetLastError());
+            else {
+                BYTE buffer[65536]; ULONGLONG total = 0; int count; ok = TRUE;
+                while ((count = unzReadCurrentFile(zipFile, buffer, sizeof(buffer))) > 0) {
+                    DWORD written = 0;
+                    if (!WriteFile(file, buffer, (DWORD)count, &written, NULL) || written != (DWORD)count) {
+                        GRFail(L"write staged file", staged, GetLastError()); ok = FALSE; break;
                     }
+                    total += (DWORD)count;
                 }
-                bRet = WriteFile(hFile, (char*)pRscr + offset, cbRscr - offset, &dwNumberOfBytesWritten, NULL);
-                CloseHandle(hFile);
+                if (ok && (count < 0 || total != info.uncompressed_size)) ok = GRFail(L"decompress archive entry", wszPath, ERROR_INVALID_DATA);
+                if (ok && !FlushFileBuffers(file)) ok = GRFail(L"flush staged file", staged, GetLastError());
+                CloseHandle(file);
             }
         }
-        free(pRscr);
     }
-    // Caller (InstallResource) will call unzCloseCurrentFile
-    return bRet;
+    if (ok) ok = GRPublishFile(wszPath, staged, FALSE);
+    if (!ok || GetFileAttributesW(staged) != INVALID_FILE_ATTRIBUTES) DeleteFileW(staged);
+    return ok;
 }
-
 __declspec(noinline) BOOL InstallResource(BOOL bInstall, HMODULE hInstance, unzFile zipFile, const char* pszFileNameInZip, LPCWSTR pwszDirectory, LPCWSTR pwszFileName)
 {
     if (bInstall && zipFile && pszFileNameInZip)
@@ -670,7 +512,7 @@ __declspec(noinline) BOOL InstallResource(BOOL bInstall, HMODULE hInstance, unzF
     wcscat_s(wszPath, MAX_PATH, pwszFileName);
     BOOL bRet = InstallResourceHelper(bInstall, hInstance, zipFile, wszPath);
     if (bInstall && zipFile && pszFileNameInZip)
-        unzCloseCurrentFile(zipFile);
+        if (unzCloseCurrentFile(zipFile) != UNZ_OK) bRet = GRFail(L"archive CRC verification", wszPath, ERROR_CRC);
     return bRet;
 }
 
@@ -715,6 +557,38 @@ typedef enum LanguageCodeTreatment
     LCT_MUI, // module\en-US\module.dll.pri
     LCT_PRI, // resource\pris\resource.en-US.pri
 } LanguageCodeTreatment;
+
+// Service only artwork entries owned by the embedded payload.
+static BOOL GRServiceOrbs(unzFile zip, BOOL install)
+{
+    if (!zip) return GRFail(L"load orb payload", grInstallRoot, ERROR_INVALID_DATA);
+    int result = unzGoToFirstFile(zip);
+    for (; result == UNZ_OK; result = unzGoToNextFile(zip)) {
+        char name[1024]; unz_file_info64 info = { 0 };
+        if (unzGetCurrentFileInfo64(zip, &info, name, sizeof(name), NULL, 0, NULL, 0) != UNZ_OK || info.size_filename >= sizeof(name))
+            return GRFail(L"read orb archive entry", grInstallRoot, ERROR_INVALID_DATA);
+        name[info.size_filename] = 0;
+        if (strncmp(name, "Orbs/", 5) || !info.uncompressed_size) continue;
+        WCHAR relative[MAX_PATH], path[MAX_PATH];
+        if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, name, -1, relative, MAX_PATH))
+            return GRFail(L"decode orb path", grInstallRoot, GetLastError());
+        for (WCHAR* c = relative; *c; ++c) if (*c == L'/') *c = L'\\';
+        PCWSTR ext = PathFindExtensionW(relative);
+        if (_wcsicmp(ext,L".bmp") && _wcsicmp(ext,L".png")) continue;
+        if (swprintf_s(path, MAX_PATH, L"%s\\%s", grInstallRoot, relative) < 0 || !GRValidateTarget(path))
+            return GRFail(L"validate orb path", grInstallRoot, ERROR_INVALID_NAME);
+        if (!install) { if (!GRPublishFile(path, NULL, TRUE)) return FALSE; continue; }
+        WCHAR parent[MAX_PATH]; wcscpy_s(parent, MAX_PATH, path); PathRemoveFileSpecW(parent);
+        int created = SHCreateDirectoryExW(NULL, parent, NULL);
+        if (created != ERROR_SUCCESS && created != ERROR_ALREADY_EXISTS && created != ERROR_FILE_EXISTS)
+            return GRFail(L"create orb directory", parent, created);
+        if (unzOpenCurrentFile(zip) != UNZ_OK) return GRFail(L"open orb archive entry", path, ERROR_INVALID_DATA);
+        BOOL ok = InstallResourceHelper(TRUE, NULL, zip, path);
+        if (unzCloseCurrentFile(zip) != UNZ_OK) return GRFail(L"verify orb CRC", path, ERROR_CRC);
+        if (!ok) return FALSE;
+    }
+    return result == UNZ_END_OF_LIST_OF_FILE || GRFail(L"enumerate orb archive", grInstallRoot, ERROR_INVALID_DATA);
+}
 
 __declspec(noinline) BOOL ExtractDirectory(unzFile zipFile, const char* dirNameInZip, LPCWSTR pwszDirectory, const WCHAR* languages, LanguageCodeTreatment langCodeTreatment)
 {
@@ -834,7 +708,7 @@ __declspec(noinline) BOOL ExtractDirectory(unzFile zipFile, const char* dirNameI
 
         bRet = InstallResourceHelper(TRUE, NULL, zipFile, wszPath);
 
-        unzCloseCurrentFile(zipFile);
+        if (unzCloseCurrentFile(zipFile) != UNZ_OK) bRet = GRFail(L"archive CRC verification", wszPath, ERROR_CRC);
     } while (bRet && unzGoToNextFile(zipFile) == UNZ_OK);
 
     return bRet;
@@ -902,61 +776,29 @@ void ProcessTaskbarDlls(BOOL* bInOutOk, BOOL bInstall, BOOL bExtractMode, HINSTA
     if (*bInOutOk) *bInOutOk = InstallResource(bInstall && (bExtractMode || pwszTaskbarDllName && !wcscmp(pwszTaskbarDllName, L"ep_taskbar.ge.dll")), hInstance, zipFile, "ep_taskbar.ge.dll", wszPath, L"ep_taskbar.ge.dll");
 }
 
-BOOL RemoveDirectoryRecursive(const WCHAR* wszDirectoryPath)
+BOOL RemoveDirectoryRecursive(const WCHAR* directory)
 {
-    WCHAR szDir[MAX_PATH];
-    wcscpy_s(szDir, MAX_PATH, wszDirectoryPath);
-    wcscat_s(szDir, MAX_PATH, L"\\*");
-
-    WIN32_FIND_DATA findFileData;
-    HANDLE hFind = FindFirstFileW(szDir, &findFileData);
-
-    if (hFind == INVALID_HANDLE_VALUE)
-    {
-        return TRUE;
-    }
-
-    do
-    {
-        if (lstrcmpW(findFileData.cFileName, L".") != 0 && lstrcmpW(findFileData.cFileName, L"..") != 0)
-        {
-            WCHAR szFilePath[MAX_PATH];
-            wcscpy_s(szFilePath, MAX_PATH, wszDirectoryPath);
-            wcscat_s(szFilePath, MAX_PATH, L"\\");
-            wcscat_s(szFilePath, MAX_PATH, findFileData.cFileName);
-
-            if ((findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
-            {
-                if (!RemoveDirectoryRecursive(szFilePath))
-                {
-                    FindClose(hFind);
-                    return FALSE;
-                }
-            }
-            else
-            {
-                if (!DeleteFileW(szFilePath) && !StageFileForCleanup(szFilePath))
-                {
-                    FindClose(hFind);
-                    return FALSE;
-                }
-            }
-        }
-    }
-    while (FindNextFileW(hFind, &findFileData));
-
-    DWORD dwError = GetLastError();
-    FindClose(hFind);
-
-    if (dwError != ERROR_NO_MORE_FILES)
-    {
-        return FALSE;
-    }
-
-    return RemoveDirectoryW(wszDirectoryPath);
+    WCHAR pattern[MAX_PATH]; swprintf_s(pattern, MAX_PATH, L"%s\\*", directory);
+    WIN32_FIND_DATAW data; HANDLE search = FindFirstFileW(pattern, &data);
+    if (search == INVALID_HANDLE_VALUE) return GetLastError() == ERROR_FILE_NOT_FOUND || GetLastError() == ERROR_PATH_NOT_FOUND;
+    BOOL ok = TRUE;
+    do {
+        if (!wcscmp(data.cFileName, L".") || !wcscmp(data.cFileName, L"..")) continue;
+        WCHAR path[MAX_PATH]; swprintf_s(path, MAX_PATH, L"%s\\%s", directory, data.cFileName);
+        BOOL backup = FALSE;
+        for (GRFileChange* change = grChanges; change; change = change->next)
+            if (!_wcsicmp(change->backup, path)) { backup = TRUE; break; }
+        if (backup) continue;
+        if (data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) { ok = GRFail(L"refuse recursive reparse traversal", path, ERROR_ACCESS_DENIED); break; }
+        if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ok = RemoveDirectoryRecursive(path);
+        else ok = GRPublishFile(path, NULL, TRUE);
+        if (!ok) break;
+    } while (FindNextFileW(search, &data));
+    DWORD error = GetLastError(); FindClose(search);
+    if (ok && error != ERROR_NO_MORE_FILES) ok = GRFail(L"enumerate obsolete payload directory", directory, error);
+    // Keep directories until backups have been committed; empty directories are harmless.
+    return ok;
 }
-
-
 int WINAPI wWinMain(
     _In_ HINSTANCE hInstance,
     _In_opt_ HINSTANCE hPrevInstance,
@@ -964,8 +806,10 @@ int WINAPI wWinMain(
     _In_ int nShowCmd
 )
 {
+    GRInitializeInstallerBranding(hInstance);
     global_ubr = VnGetOSVersionAndUBR(&global_rovi);
 
+    BOOL bResume = FALSE;
     BOOL bOk = TRUE, bInstall = TRUE, bWasShellExt = FALSE, bIsUpdate = FALSE, bForcePromptForUninstall = FALSE;
 
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
@@ -990,7 +834,8 @@ int WINAPI wWinMain(
         {
             GetCurrentDirectoryW(MAX_PATH, wszPath);
         }
-        MemoryBuffer* pMem;
+        wcscpy_s(grInstallRoot, MAX_PATH, wszPath);
+        MemoryBuffer* pMem = NULL;
         unzFile zipFile = LoadZipFileFromResources(&pMem);
         bOk = zipFile != NULL;
         if (bOk)
@@ -1001,6 +846,9 @@ int WINAPI wWinMain(
             unzClose(zipFile);
         if (pMem)
             MemoryBuffer_Destroy(&pMem);
+        if (bOk) bOk = GRCommitFiles();
+        if (!bOk) GRRollbackFiles();
+        GRFreeChanges();
         return !bOk;
     }
 
@@ -1022,7 +870,7 @@ int WINAPI wWinMain(
                     WCHAR szMessage[256];
                     szMessage[0] = 0;
                     _swprintf_p(szMessage, ARRAYSIZE(szMessage), szFormat, L"ARM64", L"x64");
-                    MessageBoxW(NULL, szMessage, _T(PRODUCT_DISPLAY_NAME), MB_OK | MB_ICONERROR);
+                    GRInstallerMessageBox(NULL, szMessage, _T(PRODUCT_DISPLAY_NAME), MB_OK | MB_ICONERROR);
                 }
                 exit(0);
             }
@@ -1038,6 +886,8 @@ int WINAPI wWinMain(
     }
 
     bInstall = !(argc >= 1 && (!_wcsicmp(wargv[0], L"/uninstall") || !_wcsicmp(wargv[0], L"/uninstall_silent")));
+    bResume = argc >= 1 && (!_wcsicmp(wargv[0], L"/resume_install") || !_wcsicmp(wargv[0], L"/resume_uninstall"));
+    if (bResume) bInstall = _wcsicmp(wargv[0], L"/resume_uninstall") != 0;
     PathStripPathW(wszOwnPath);
     if (!_wcsicmp(wszOwnPath, L"ep_uninstall.exe"))
     {
@@ -1054,7 +904,7 @@ int WINAPI wWinMain(
         wchar_t mbText[256];
         mbText[0] = 0;
         LoadStringW(hInstance, IDS_SETUP_UNINSTALL_PROMPT, mbText, ARRAYSIZE(mbText));
-        if (MessageBoxW(NULL, mbText, _T(PRODUCT_DISPLAY_NAME), MB_YESNO | MB_DEFBUTTON2 | MB_ICONQUESTION) == IDNO)
+        if (GRInstallerMessageBox(NULL, mbText, _T(PRODUCT_DISPLAY_NAME), MB_YESNO | MB_DEFBUTTON2 | MB_ICONQUESTION) == IDNO)
         {
             exit(0);
         }
@@ -1067,7 +917,7 @@ int WINAPI wWinMain(
         sei.cbSize = sizeof(sei);
         sei.lpVerb = L"runas";
         sei.lpFile = wszOwnPath;
-        sei.lpParameters = !bInstall ? L"/uninstall_silent" : lpCmdLine;
+        sei.lpParameters = bResume ? lpCmdLine : !bInstall ? L"/uninstall_silent" : lpCmdLine;
         sei.hwnd = NULL;
         sei.nShow = SW_NORMAL;
         if (!ShellExecuteExW(&sei))
@@ -1080,14 +930,24 @@ int WINAPI wWinMain(
         exit(0);
     }
 
+    HANDLE servicingMutex = CreateMutexW(NULL, TRUE, L"Global\\GRTaskbar-Servicing");
+    if (!servicingMutex || GetLastError() == ERROR_ALREADY_EXISTS) {
+        GRInstallerMessageBox(NULL, L"Another GR Taskbar installer is running. Wait for it to finish, then try again.",
+            _T(PRODUCT_DISPLAY_NAME), MB_OK | MB_ICONINFORMATION);
+        if (servicingMutex) CloseHandle(servicingMutex);
+        return ERROR_INSTALL_ALREADY_RUNNING;
+    }
+    GRInitLog();
     MemoryBuffer* pMem = NULL;
     unzFile zipFile = NULL;
-    if (bInstall)
     {
         zipFile = LoadZipFileFromResources(&pMem);
         if (!zipFile)
         {
-            exit(0);
+            GRFail(L"load embedded payload archive", wszOwnPath, ERROR_INVALID_DATA);
+            if (grLog != INVALID_HANDLE_VALUE) CloseHandle(grLog);
+            ReleaseMutex(servicingMutex); CloseHandle(servicingMutex);
+            return ERROR_INVALID_DATA;
         }
     }
 
@@ -1098,7 +958,7 @@ int WINAPI wWinMain(
         wchar_t mbText[256];
         mbText[0] = 0;
         LoadStringW(hInstance, bInstall ? IDS_SETUP_INSTALL_LOGOFF : IDS_SETUP_UNINSTALL_LOGOFF, mbText, ARRAYSIZE(mbText));
-        if (MessageBoxW(NULL, mbText, _T(PRODUCT_DISPLAY_NAME), MB_YESNO | MB_DEFBUTTON1 | MB_ICONQUESTION) == IDYES)
+        if (GRInstallerMessageBox(NULL, mbText, _T(PRODUCT_DISPLAY_NAME), MB_YESNO | MB_DEFBUTTON1 | MB_ICONQUESTION) == IDYES)
         {
             RegDeleteKeyValueW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Shell\\Update\\Packages", L"UndockingDisabled");
         }
@@ -1117,8 +977,13 @@ int WINAPI wWinMain(
     {
         bOk = TRUE;
     }
+    if (!bOk) GRFail(L"create installation directory", wszPath, GetLastError());
     if (bOk)
     {
+        wcscpy_s(grInstallRoot, MAX_PATH, wszPath);
+        WCHAR journalProbe[MAX_PATH];
+        swprintf_s(journalProbe, MAX_PATH, L"%s\\servicing.rollback", grInstallRoot);
+        bOk = GRValidateTarget(journalProbe);
         HANDLE userToken = INVALID_HANDLE_VALUE;
 
         HWND hShellTrayWnd = FindWindowW(L"Shell_TrayWnd", NULL);
@@ -1131,88 +996,20 @@ int WINAPI wWinMain(
                 HANDLE explorerProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, explorerProcessId);
                 if (explorerProcess != NULL)
                 {
-                    OpenProcessToken(explorerProcess, TOKEN_QUERY | TOKEN_DUPLICATE | TOKEN_ASSIGN_PRIMARY, &userToken);
-                    CloseHandle(explorerProcess);
-                }
-                if (userToken)
-                {
-                    HANDLE myToken = INVALID_HANDLE_VALUE;
-                    OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY | TOKEN_DUPLICATE | TOKEN_ASSIGN_PRIMARY, &myToken);
-                    if (myToken != INVALID_HANDLE_VALUE)
-                    {
-                        DWORD cbSizeNeeded = 0;
-                        SetLastError(0);
-                        if (!GetTokenInformation(userToken, TokenUser, NULL, 0, &cbSizeNeeded) && GetLastError() == ERROR_INSUFFICIENT_BUFFER)
-                        {
-                            TOKEN_USER* userTokenInfo = malloc(cbSizeNeeded);
-                            if (userTokenInfo)
-                            {
-                                if (GetTokenInformation(userToken, TokenUser, userTokenInfo, cbSizeNeeded, &cbSizeNeeded))
-                                {
-                                    cbSizeNeeded = 0;
-                                    SetLastError(0);
-                                    if (!GetTokenInformation(myToken, TokenUser, NULL, 0, &cbSizeNeeded) && GetLastError() == ERROR_INSUFFICIENT_BUFFER)
-                                    {
-                                        TOKEN_USER* myTokenInfo = malloc(cbSizeNeeded);
-                                        if (myTokenInfo)
-                                        {
-                                            if (GetTokenInformation(myToken, TokenUser, myTokenInfo, cbSizeNeeded, &cbSizeNeeded))
-                                            {
-                                                if (EqualSid(userTokenInfo->User.Sid, myTokenInfo->User.Sid))
-                                                {
-                                                    CloseHandle(userToken);
-                                                    userToken = INVALID_HANDLE_VALUE;
-                                                }
-                                            }
-                                            free(myTokenInfo);
-                                        }
-                                    }
-                                }
-                                free(userTokenInfo);
-                            }
-                        }
-                        CloseHandle(myToken);
+                    if (!OpenProcessToken(explorerProcess, TOKEN_QUERY | TOKEN_DUPLICATE | TOKEN_ASSIGN_PRIMARY, &userToken)) {
+                        DWORD tokenError = GetLastError();
+                        if (bOk) bOk = GRFail(L"OpenProcessToken: interactive shell", L"explorer.exe", tokenError);
                     }
-                }
-            }
-            DWORD_PTR res = -1;
-            if (!SendMessageTimeoutW(hShellTrayWnd, 1460, 0, 0, SMTO_ABORTIFHUNG, 2000, &res) && res)
-            {
-                HANDLE hExplorerRestartThread = CreateThread(NULL, 0, BeginExplorerRestart, NULL, 0, NULL);
-                if (hExplorerRestartThread)
-                {
-                    WaitForSingleObject(hExplorerRestartThread, 2000);
-                    CloseHandle(hExplorerRestartThread);
-                    hExplorerRestartThread = NULL;
-                }
-                else
-                {
-                    BeginExplorerRestart(NULL);
-                }
+                    CloseHandle(explorerProcess);
+                } else if (bOk) bOk = GRFail(L"OpenProcess: interactive shell", L"explorer.exe", GetLastError());
+
             }
         }
-        Sleep(100);
-        GetSystemDirectoryW(wszPath, MAX_PATH);
-        wcscat_s(wszPath, MAX_PATH, L"\\taskkill.exe");
-        SHELLEXECUTEINFOW sei;
-        ZeroMemory(&sei, sizeof(SHELLEXECUTEINFOW));
-        sei.cbSize = sizeof(sei);
-        sei.fMask = SEE_MASK_NOCLOSEPROCESS;
-        sei.hwnd = NULL;
-        sei.hInstApp = NULL;
-        sei.lpVerb = NULL;
-        sei.lpFile = wszPath;
-        sei.lpParameters = L"/f /im explorer.exe";
-        sei.hwnd = NULL;
-        sei.nShow = SW_SHOWMINIMIZED;
-        if (ShellExecuteExW(&sei) && sei.hProcess)
-        {
-            WaitForSingleObject(sei.hProcess, INFINITE);
-            CloseHandle(sei.hProcess);
-        }
-
-        Sleep(500);
-
+        if (bOk) GRCloseSettings();
+        if (bOk && hShellTrayWnd && (!userToken || userToken == INVALID_HANDLE_VALUE))
+            bOk = GRFail(L"capture interactive shell token", L"explorer.exe", ERROR_ACCESS_DENIED);
+        if (bOk && GetFileAttributesW(journalProbe) != INVALID_FILE_ATTRIBUTES)
+            bOk = GRStopExplorer(hShellTrayWnd);
         BOOL bAreRoundedCornersDisabled = FALSE;
         HANDLE h_exists = CreateEventW(NULL, FALSE, FALSE, _T(EP_DWM_EVENTNAME));
         if (h_exists)
@@ -1224,11 +1021,7 @@ int WINAPI wWinMain(
         {
             bAreRoundedCornersDisabled = GetLastError() == ERROR_ACCESS_DENIED;
         }
-        RegisterDWMService(0, 1);
-        if (bInstall && bAreRoundedCornersDisabled)
-        {
-            RegisterDWMService(0, 3);
-        }
+        // Registration changes wait until payload files have been serviced.
 
         WCHAR wszSCPath[MAX_PATH];
         GetSystemDirectoryW(wszSCPath, MAX_PATH);
@@ -1243,63 +1036,21 @@ int WINAPI wWinMain(
         ShExecInfo.lpDirectory = NULL;
         ShExecInfo.nShow = SW_HIDE;
         ShExecInfo.hInstApp = NULL;
-        if (ShellExecuteExW(&ShExecInfo) && ShExecInfo.hProcess)
+        if (bOk && ShellExecuteExW(&ShExecInfo) && ShExecInfo.hProcess)
         {
-            WaitForSingleObject(ShExecInfo.hProcess, INFINITE);
+            if (WaitForSingleObject(ShExecInfo.hProcess, 30000) != WAIT_OBJECT_0) GRLog(L"service helper wait timed out", ShExecInfo.lpFile, WAIT_TIMEOUT);
             DWORD dwExitCode = 0;
             GetExitCodeProcess(ShExecInfo.hProcess, &dwExitCode);
             CloseHandle(ShExecInfo.hProcess);
         }
 
-        HWND hWnd = FindWindowW(L"GRTaskbar_GUI_" _T(EP_CLSID), NULL);
-        if (hWnd)
-        {
-            DWORD dwGUIPid = 0;
-            GetWindowThreadProcessId(hWnd, &dwGUIPid);
-            if (dwGUIPid)
-            {
-                HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, dwGUIPid);
-                if (hProcess)
-                {
-                    DWORD dwSection = (DWORD)SendMessageW(hWnd, WM_MSG_GUI_SECTION, WM_MSG_GUI_SECTION_GET, 0);
-
-                    TerminateProcess(hProcess, 0);
-                    CloseHandle(hProcess);
-
-                    HKEY hKey = NULL;
-
-                    RegCreateKeyExW(
-                        HKEY_CURRENT_USER,
-                        TEXT(REGPATH),
-                        0,
-                        NULL,
-                        REG_OPTION_NON_VOLATILE,
-                        KEY_READ | KEY_WOW64_64KEY | KEY_WRITE,
-                        NULL,
-                        &hKey,
-                        NULL
-                    );
-                    if (hKey == NULL || hKey == INVALID_HANDLE_VALUE)
-                    {
-                        hKey = NULL;
-                    }
-                    if (hKey)
-                    {
-                        RegSetValueExW(
-                            hKey,
-                            TEXT("OpenPropertiesAtNextStart"),
-                            0,
-                            REG_DWORD,
-                            (const BYTE*)&dwSection,
-                            sizeof(DWORD)
-                        );
-                        RegCloseKey(hKey);
-                    }
-                }
-            }
-        }
-
-        Sleep(1000);
+        // Recover only after our settings, shell and service have released their files.
+        if (bOk) bOk = GRBeginFiles();
+        if (bOk && grStoppedShell) bOk = GRRestartShell(userToken);
+        // Artwork is serviced while the desktop is available; only binaries need a shell stop.
+        if (bOk) bOk = GRServiceOrbs(zipFile, bInstall);
+        if (bOk) GRCloseSettings();
+        if (bOk) bOk = GRStopExplorer(FindWindowW(L"Shell_TrayWnd", NULL));
 
         // --------------------------------------------------------------------------------
 
@@ -1359,7 +1110,7 @@ int WINAPI wWinMain(
                     sei.nShow = SW_NORMAL;
                     if (ShellExecuteExW(&sei) && sei.hProcess)
                     {
-                        WaitForSingleObject(sei.hProcess, INFINITE);
+                        if (WaitForSingleObject(sei.hProcess, 30000) != WAIT_OBJECT_0) GRLog(L"registration helper wait timed out", sei.lpFile, WAIT_TIMEOUT);
                         DWORD dwExitCode = 0;
                         GetExitCodeProcess(sei.hProcess, &dwExitCode);
                         SetLastError(dwExitCode);
@@ -1376,6 +1127,7 @@ int WINAPI wWinMain(
 #endif
         if (CHECK_OK(bOk)) bOk = InstallResource(bInstall, hInstance, zipFile, "ep_gui.dll", wszPath, L"ep_gui.dll");
         if (CHECK_OK(bOk)) bOk = InstallResource(bInstall, hInstance, zipFile, "LICENSE", wszPath, L"LICENSE.txt");
+        if (CHECK_OK(bOk)) bOk = InstallResource(bInstall, hInstance, zipFile, "GR-Taskbar.cat", wszPath, L"GR-Taskbar.cat");
         if (CHECK_OK(bOk)) bOk = DeleteResource(wszPath, L"ep_dwm.exe"); // We renamed it to ep_dwm_svc.exe due to Microsoft imposing 24H2 upgrade blocks
         if (CHECK_OK(bOk)) bOk = InstallResource(bInstall, hInstance, zipFile, "ep_dwm_svc.exe", wszPath, L"ep_dwm_svc.exe");
         if (bInstall)
@@ -1505,7 +1257,7 @@ int WINAPI wWinMain(
                 WCHAR wszSymLinkPath[MAX_PATH];
                 wcscpy_s(wszSymLinkPath, MAX_PATH, wszPath);
                 wcscat_s(wszSymLinkPath, MAX_PATH, L"\\wincorlib_orig.dll");
-                bOk = CreateSymbolicLinkW(wszSymLinkPath, wszOrigPath, 0);
+                bOk = GRInstallSymbolicLink(wszSymLinkPath, wszOrigPath);
             }
 
             if (CHECK_OK(bOk)) bOk = InstallResource(bInstall && bUnpackCustomStartUI, hInstance, zipFile, "JumpViewUI/JumpViewUI.dll", wszPath, L"JumpViewUI_.dll");
@@ -1525,7 +1277,7 @@ int WINAPI wWinMain(
                 if (FileExistsW(wszSubPath))
                 {
                     bOk = DeleteResource(wszSubPath, L"StartTileDataLegacy.dll.mui");
-                    if (CHECK_OK(bOk)) bOk = RemoveDirectoryW(wszSubPath);
+                    /* Backups stay in place until commit; empty directories can remain. */
                 }
             }
 
@@ -1538,7 +1290,7 @@ int WINAPI wWinMain(
                 if (FileExistsW(wszSubPath))
                 {
                     bOk = DeleteResource(wszSubPath, L"Windows.UI.ShellCommon.en-US.pri");
-                    if (CHECK_OK(bOk)) bOk = RemoveDirectoryW(wszSubPath);
+                    /* Backups stay in place until commit; empty directories can remain. */
                 }
             }
 
@@ -1583,10 +1335,11 @@ int WINAPI wWinMain(
             wcscat_s(wszPath, MAX_PATH, _T(APP_RELATIVE_PATH) L"\\" _T(SETUP_UTILITY_NAME) L"\" /uninstall");
             bOk = SetupUninstallEntry(bInstall, wszPath);
         }
+        if (bOk && bInstall && bAreRoundedCornersDisabled) RegisterDWMService(0, 3);
         ShExecInfo.lpParameters = bInstall ? L"start " _T(EP_DWM_SERVICENAME) : L"delete " _T(EP_DWM_SERVICENAME);
-        if (ShellExecuteExW(&ShExecInfo) && ShExecInfo.hProcess)
+        if (bOk && ShellExecuteExW(&ShExecInfo) && ShExecInfo.hProcess)
         {
-            WaitForSingleObject(ShExecInfo.hProcess, INFINITE);
+            if (WaitForSingleObject(ShExecInfo.hProcess, 30000) != WAIT_OBJECT_0) GRLog(L"service helper wait timed out", ShExecInfo.lpFile, WAIT_TIMEOUT);
             DWORD dwExitCode = 0;
             GetExitCodeProcess(ShExecInfo.hProcess, &dwExitCode);
             CloseHandle(ShExecInfo.hProcess);
@@ -1625,7 +1378,7 @@ int WINAPI wWinMain(
             sei.nShow = SW_NORMAL;
             if (ShellExecuteExW(&sei) && sei.hProcess)
             {
-                WaitForSingleObject(sei.hProcess, INFINITE);
+                if (WaitForSingleObject(sei.hProcess, 30000) != WAIT_OBJECT_0) GRLog(L"registration helper wait timed out", sei.lpFile, WAIT_TIMEOUT);
                 DWORD dwExitCode = 0;
                 GetExitCodeProcess(sei.hProcess, &dwExitCode);
                 SetLastError(dwExitCode);
@@ -1666,7 +1419,7 @@ int WINAPI wWinMain(
             sei.nShow = SW_NORMAL;
             if (ShellExecuteExW(&sei) && sei.hProcess)
             {
-                WaitForSingleObject(sei.hProcess, INFINITE);
+                if (WaitForSingleObject(sei.hProcess, 30000) != WAIT_OBJECT_0) GRLog(L"registration helper wait timed out", sei.lpFile, WAIT_TIMEOUT);
                 DWORD dwExitCode = 0;
                 GetExitCodeProcess(sei.hProcess, &dwExitCode);
                 SetLastError(dwExitCode);
@@ -1702,50 +1455,9 @@ int WINAPI wWinMain(
             {
                 SHGetFolderPathW(NULL, SPECIAL_FOLDER, NULL, SHGFP_TYPE_CURRENT, wszPath);
                 wcscat_s(wszPath, MAX_PATH, _T(APP_RELATIVE_PATH));
-                bOk = RemoveDirectoryRecursive(wszPath);
+                GRLog(L"preserve user files; remove known payload only", wszPath, 0);
             }
-            if (CHECK_OK(bOk) && (!bInstall || g_cleanupFileCounter > 1))
-            {
-                WCHAR wszDirToDelete[MAX_PATH];
-                SHGetFolderPathW(NULL, CSIDL_APPDATA, NULL, SHGFP_TYPE_CURRENT, wszDirToDelete);
-                wcscat_s(wszDirToDelete, MAX_PATH, _T(APP_RELATIVE_PATH));
-                if (bInstall)
-                {
-                    wcscat_s(wszDirToDelete, MAX_PATH, L"\\cleanup");
-                }
-
-                HKEY hKey = NULL;
-                RegCreateKeyExW(HKEY_CURRENT_USER, L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\RunOnce", 0, NULL, REG_OPTION_NON_VOLATILE, KEY_READ | KEY_WRITE, NULL, &hKey, NULL);
-                if (hKey && hKey != INVALID_HANDLE_VALUE)
-                {
-                    WCHAR wszCommand[MAX_PATH];
-                    wcscpy_s(wszCommand, MAX_PATH, L"cmd /c rmdir /s /q \"");
-                    wcscat_s(wszCommand, MAX_PATH, wszDirToDelete);
-                    wcscat_s(wszCommand, MAX_PATH, L"\"");
-                    RegSetValueExW(hKey, L"ExplorerPatcherCleanup", 0, REG_SZ, (BYTE*)wszCommand, (DWORD)((wcslen(wszCommand) + 1) * sizeof(WCHAR)));
-                    RegCloseKey(hKey);
-                }
-            }
-            if (!bInstall)
-            {
-                wchar_t mbText[256];
-                mbText[0] = 0;
-                if (bWasShellExt)
-                {
-                    LoadStringW(hInstance, IDS_SETUP_UNINSTALL_RESTART, mbText, ARRAYSIZE(mbText));
-                    if (MessageBoxW(NULL, mbText, _T(PRODUCT_DISPLAY_NAME), MB_YESNO | MB_DEFBUTTON1 | MB_ICONQUESTION) == IDYES)
-                    {
-                        SystemShutdown(TRUE);
-                    }
-                }
-                else
-                {
-                    LoadStringW(hInstance, IDS_SETUP_UNINSTALL_FINISH, mbText, ARRAYSIZE(mbText));
-                    MessageBoxW(NULL, mbText, _T(PRODUCT_DISPLAY_NAME), MB_ICONASTERISK | MB_OK | MB_DEFBUTTON1);
-                }
-            }
-            else
-            {
+            if (bInstall) {
                 if (bIsUpdate)
                 {
                     HKEY hKey = NULL;
@@ -1783,15 +1495,35 @@ int WINAPI wWinMain(
                 //ZZRestartExplorer(0, 0, 0, 0);
             }
         }
-        if (!bOk) //  && !(argc >= 1 && !_wcsicmp(wargv[0], L"/update_silent"))
-        {
-            wchar_t mbText[1024];
-            mbText[0] = 0;
-            LoadStringW(hInstance, IDS_SETUP_FAILED, mbText, ARRAYSIZE(mbText));
-            wchar_t szDblNewlineAndLineNumber[32];
-            swprintf_s(szDblNewlineAndLineNumber, ARRAYSIZE(szDblNewlineAndLineNumber), L"\n\n%d", g_uFailureLine);
-            wcscat_s(mbText, ARRAYSIZE(mbText), szDblNewlineAndLineNumber);
-            MessageBoxW(NULL, mbText, _T(PRODUCT_DISPLAY_NAME), MB_ICONERROR | MB_OK | MB_DEFBUTTON1);
+        if (bOk) bOk = GRRestartShell(userToken);
+        if (bOk) bOk = GRCommitFiles();
+        if (!bOk) {
+            if (!grFailureCode) GRFail(L"servicing step", wszPath, GetLastError());
+            if (grJournalReady && FindWindowW(L"Shell_TrayWnd", NULL) && grChanges)
+                GRStopExplorer(FindWindowW(L"Shell_TrayWnd", NULL));
+            BOOL restored = grJournalReady && GRRollbackFiles();
+            GRCloseJournal(restored);
+            BOOL deferred = restored && !bResume && grFailureIsLock && GRScheduleRebootRetry(bInstall);
+            if (grStoppedShell) GRRestartShell(userToken);
+            WCHAR message[2048], system[512] = L"";
+            FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL,
+                grFailureCode, 0, system, ARRAYSIZE(system), NULL);
+            swprintf_s(message, ARRAYSIZE(message),
+                L"GR Taskbar could not complete servicing.\n\nOperation: %s\nFile: %s\nWindows error: %lu (0x%08lX)\n%s\n\n%s\n\n\x2022 Settings and custom icons were preserved.\n\x2022 Diagnostic log: %s\n\nSource checkpoint: %u",
+                grFailureOperation, grFailurePath, grFailureCode, grFailureCode, system,
+                restored ? L"Previous application files were restored." : L"Some files could not be restored. Backups were retained; see the log.",
+                grLogPath, g_uFailureLine);
+            if (deferred) wcscat_s(message, ARRAYSIZE(message), L"\n\nThe complete operation is queued for after reboot and sign-in. No partial DLL replacements were queued.");
+            GRInstallerMessageBox(NULL, message, _T(PRODUCT_DISPLAY_NAME), MB_ICONERROR | MB_OK);
+        }
+        GRFreeChanges();
+        if (grStoppedShell) GRRestartShell(userToken);
+        if (bOk && !bInstall && !bResume && !(argc >= 1 && !_wcsicmp(wargv[0], L"/uninstall_silent"))) {
+            WCHAR text[512] = L"";
+            LoadStringW(hInstance, bWasShellExt || grNeedsReboot ? IDS_SETUP_UNINSTALL_RESTART : IDS_SETUP_UNINSTALL_FINISH,
+                text, ARRAYSIZE(text));
+            if (GRInstallerMessageBox(NULL, text, _T(PRODUCT_DISPLAY_NAME), bWasShellExt || grNeedsReboot ? MB_YESNO | MB_ICONQUESTION : MB_OK | MB_ICONINFORMATION) == IDYES)
+                SystemShutdown(TRUE);
         }
         if (bOk && bIsUndockingDisabled)
         {
@@ -1799,8 +1531,8 @@ int WINAPI wWinMain(
             exit(0);
         }
 
-        StartExplorerWithDelay(1000, userToken);
-        if (userToken != INVALID_HANDLE_VALUE) CloseHandle(userToken);
+        if (grStoppedShell) GRRestartShell(userToken);
+        if (userToken && userToken != INVALID_HANDLE_VALUE) CloseHandle(userToken);
     }
 
     if (zipFile)
@@ -1808,5 +1540,11 @@ int WINAPI wWinMain(
     if (pMem)
         MemoryBuffer_Destroy(&pMem);
 
-	return GetLastError();
+    if (bResume && GRBelowRoot(wszOwnPath, grInstallRoot) && !DeleteFileW(wszOwnPath))
+        MoveFileExW(wszOwnPath, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
+    GRLog(L"servicing finished", grInstallRoot, grNeedsReboot ? ERROR_SUCCESS_REBOOT_REQUIRED : grFailureCode);
+    if (grLog != INVALID_HANDLE_VALUE) CloseHandle(grLog);
+    ReleaseMutex(servicingMutex); CloseHandle(servicingMutex);
+    return grFailureCode ? (grServicingDeferred ? ERROR_SUCCESS_REBOOT_REQUIRED : grFailureCode) :
+        grNeedsReboot ? ERROR_SUCCESS_REBOOT_REQUIRED : ERROR_SUCCESS;
 }

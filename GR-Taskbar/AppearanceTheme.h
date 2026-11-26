@@ -37,8 +37,8 @@ static BOOL DrawAppearanceTaskbar(HDC dc, LPCRECT rect, LPCRECT clip)
     if (!saved) return FALSE;
     if (clip) IntersectClipRect(dc, clip->left, clip->top, clip->right, clip->bottom);
     TRIVERTEX vertices[2] = {
-        { rect->left, rect->top, GetRValue(theme.topColor) << 8, GetGValue(theme.topColor) << 8, GetBValue(theme.topColor) << 8, 0xffff },
-        { rect->right, rect->bottom, GetRValue(theme.bottomColor) << 8, GetGValue(theme.bottomColor) << 8, GetBValue(theme.bottomColor) << 8, 0xffff }
+        { rect->left, rect->top, (COLOR16)(GetRValue(theme.topColor) << 8), (COLOR16)(GetGValue(theme.topColor) << 8), (COLOR16)(GetBValue(theme.topColor) << 8), 0xffff },
+        { rect->right, rect->bottom, (COLOR16)(GetRValue(theme.bottomColor) << 8), (COLOR16)(GetGValue(theme.bottomColor) << 8), (COLOR16)(GetBValue(theme.bottomColor) << 8), 0xffff }
     };
     GRADIENT_RECT gradient = { 0, 1 };
     BOOL result = GdiGradientFill(dc, vertices, 2, &gradient, 1,

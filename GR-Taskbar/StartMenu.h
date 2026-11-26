@@ -183,6 +183,7 @@ interface IImmersiveLauncher10RS
     CONST_VTBL struct IImmersiveLauncher10RSVtbl* lpVtbl;
 };
 
+BOOL GRTryOpenStartOnMonitor(HMONITOR monitor);
 void OpenStartOnMonitor(HMONITOR monitor);
 
 // Slightly tweaked version of function available in Open Shell 

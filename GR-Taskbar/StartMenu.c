@@ -1,69 +1,47 @@
 #include "StartMenu.h"
 
+BOOL GRTryOpenStartOnMonitor(HMONITOR monitor)
+{
+    HRESULT hr;
+    IUnknown* shell = NULL;
+    IImmersiveMonitorService* service = NULL;
+    IUnknown* target = NULL;
+    IImmersiveLauncher10RS* launcher = NULL;
+    BOOL visible = FALSE;
+    hr = CoCreateInstance(&CLSID_ImmersiveShell, NULL,
+        CLSCTX_NO_CODE_DOWNLOAD | CLSCTX_LOCAL_SERVER,
+        &IID_IServiceProvider, (void**)&shell);
+    if (FAILED(hr) || !shell) goto cleanup;
+    // Monitor selection is optional; failure must not block Start activation.
+    if (monitor && SUCCEEDED(IUnknown_QueryService(shell,
+        &SID_IImmersiveMonitorService, &IID_IImmersiveMonitorService,
+        (void**)&service)) && service)
+        service->lpVtbl->GetFromHandle(service, monitor, &target);
+    hr = IUnknown_QueryService(shell, &SID_ImmersiveLauncher,
+        &IID_IImmersiveLauncher10RS, (void**)&launcher);
+    if (FAILED(hr) || !launcher) goto cleanup;
+    hr = launcher->lpVtbl->IsVisible(launcher, &visible);
+    if (FAILED(hr)) goto cleanup;
+    if (visible)
+        hr = launcher->lpVtbl->Dismiss(launcher);
+    else
+    {
+        if (target) launcher->lpVtbl->ConnectToMonitor(launcher, target);
+        hr = launcher->lpVtbl->ShowStartView(launcher, 11, 0);
+    }
+cleanup:
+    if (!launcher && SUCCEEDED(hr)) hr = E_NOINTERFACE;
+    if (launcher) launcher->lpVtbl->Release(launcher);
+    if (target) target->lpVtbl->Release(target);
+    if (service) service->lpVtbl->Release(service);
+    if (shell) shell->lpVtbl->Release(shell);
+    if (FAILED(hr)) printf("GR Taskbar: Start activation failed (0x%08lX)\n", (unsigned long)hr);
+    return SUCCEEDED(hr);
+}
+
 void OpenStartOnMonitor(HMONITOR monitor)
 {
-    HRESULT hr = S_OK;
-    IUnknown* pImmersiveShell = NULL;
-    hr = CoCreateInstance(
-        &CLSID_ImmersiveShell,
-        NULL,
-        CLSCTX_NO_CODE_DOWNLOAD | CLSCTX_LOCAL_SERVER,
-        &IID_IServiceProvider,
-        &pImmersiveShell
-    );
-    if (SUCCEEDED(hr))
-    {
-        IImmersiveMonitorService* pMonitorService = NULL;
-        IUnknown_QueryService(
-            pImmersiveShell,
-            &SID_IImmersiveMonitorService,
-            &IID_IImmersiveMonitorService,
-            &pMonitorService
-        );
-        if (pMonitorService)
-        {
-            IUnknown* pMonitor = NULL;
-            pMonitorService->lpVtbl->GetFromHandle(
-                pMonitorService,
-                monitor,
-                &pMonitor
-            );
-            IImmersiveLauncher10RS* pLauncher = NULL;
-            IUnknown_QueryService(
-                pImmersiveShell,
-                &SID_ImmersiveLauncher,
-                &IID_IImmersiveLauncher10RS,
-                &pLauncher
-            );
-            if (pLauncher)
-            {
-                BOOL bIsVisible = FALSE;
-                pLauncher->lpVtbl->IsVisible(pLauncher, &bIsVisible);
-                if (SUCCEEDED(hr))
-                {
-                    if (!bIsVisible)
-                    {
-                        if (pMonitor)
-                        {
-                            pLauncher->lpVtbl->ConnectToMonitor(pLauncher, pMonitor);
-                        }
-                        pLauncher->lpVtbl->ShowStartView(pLauncher, 11, 0);
-                    }
-                    else
-                    {
-                        pLauncher->lpVtbl->Dismiss(pLauncher);
-                    }
-                }
-                pLauncher->lpVtbl->Release(pLauncher);
-            }
-            if (pMonitor)
-            {
-                pMonitor->lpVtbl->Release(pMonitor);
-            }
-            pMonitorService->lpVtbl->Release(pMonitorService);
-        }
-        pImmersiveShell->lpVtbl->Release(pImmersiveShell);
-    }
+    GRTryOpenStartOnMonitor(monitor);
 }
 
 LRESULT CALLBACK OpenStartOnCurentMonitorThreadHook(
@@ -129,9 +107,9 @@ LRESULT CALLBACK OpenStartOnCurentMonitorThreadHook(
                     monitor = mod.hMonitor;
                 }
             }
-            OpenStartOnMonitor(monitor);
-
-            msg->message = WM_NULL;
+            // Only consume a native Start request if our activation succeeded.
+            if (GRTryOpenStartOnMonitor(monitor))
+                msg->message = WM_NULL;
         }
     }
 finish:

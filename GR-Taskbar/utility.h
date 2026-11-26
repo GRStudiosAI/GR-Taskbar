@@ -832,7 +832,10 @@ inline BOOL GetChpeRangesPEFile64(
         return FALSE;
     }
 
-    UINT_PTR metadataOffset = RVAToFileOffset((PBYTE)dosHeader, cfg->CHPEMetadataPointer - opt->ImageBase);
+    if (cfg->CHPEMetadataPointer < opt->ImageBase ||
+        cfg->CHPEMetadataPointer - opt->ImageBase > (ULONGLONG)(UINT_PTR)-1)
+        return FALSE;
+    UINT_PTR metadataOffset = RVAToFileOffset((PBYTE)dosHeader, (UINT_PTR)(cfg->CHPEMetadataPointer - opt->ImageBase));
     if (!metadataOffset || metadataOffset + sizeof(EP_IMAGE_ARM64EC_METADATA) > fileSize)
     {
         return FALSE;

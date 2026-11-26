@@ -4,6 +4,7 @@
 //
 #define IDR_REGISTRY1                   101
 #define IDR_REGISTRY2                   102
+#define IDI_GR_TASKBAR                  103
 #define IDS_PRODUCTNAME                 201
 
 // 301-500

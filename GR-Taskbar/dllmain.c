@@ -11,7 +11,6 @@
 #include <Uxtheme.h>
 #include "CustomOrb.h"
 #include "AppearanceTheme.h"
-#include "BrandMigration.h"
 #pragma comment(lib, "UxTheme.lib")
 #include <Shlobj_core.h>
 #include <propvarutil.h>
@@ -167,9 +166,24 @@ int (*SHWindowsPolicy)(REFIID);
 #define ORB_STYLE_TRANSPARENT 2
 static SRWLOCK customOrbLock = SRWLOCK_INIT;
 static CustomOrbImage customOrb;
+static GRStartIconSizing customOrbSizing = { 0, GR_START_ICON_DEFAULT_SIZE };
+static GRStartIconRenderCache customOrbRenderCache;
+static BOOL CALLBACK GRRefreshStartButtonWindow(HWND hwnd, LPARAM unused)
+{
+    (void)unused;
+    DWORD process = 0;
+    GetWindowThreadProcessId(hwnd, &process);
+    if (process != GetCurrentProcessId()) return TRUE;
+    WCHAR name[64];
+    if (GetClassNameW(hwnd, name, ARRAYSIZE(name)) &&
+        (!wcscmp(name, L"Shell_TrayWnd") || !wcscmp(name, L"Shell_SecondaryTrayWnd")))
+        RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_FRAME);
+    return TRUE;
+}
 typedef struct _OrbInfo
 {
     HTHEME hTheme;
+    HWND hwnd;
     BOOL taskbarBackground;
     UINT dpi;
 } OrbInfo;
@@ -1646,8 +1660,7 @@ int HandleTaskbarCornerInteraction(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
             }
             if (dwUndeadStartCorner != 2)
             {
-                OpenStartOnMonitor(hMonitor);
-                return 1;
+                return GRTryOpenStartOnMonitor(hMonitor) ? 1 : 0;
             }
             DWORD dwVal = 1, dwSize = sizeof(DWORD);
             RegGetValueW(HKEY_CURRENT_USER, L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", L"TaskbarAl", RRF_RT_DWORD, NULL, &dwVal, &dwSize);
@@ -1657,8 +1670,7 @@ int HandleTaskbarCornerInteraction(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
                 RegSetKeyValueW(HKEY_CURRENT_USER, L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", L"TaskbarAl", REG_DWORD, &dwVal, sizeof(DWORD));
                 if (hWndServiceWindow) SetTimer(hWndServiceWindow, 10, 1000, NULL);
             }
-            OpenStartOnMonitor(hMonitor);
-            return 1;
+            return GRTryOpenStartOnMonitor(hMonitor) ? 1 : 0;
         }
     }
     return 0;
@@ -1668,7 +1680,7 @@ INT64 ReBarWindow32SubclassProc(_In_ HWND hWnd, _In_ UINT uMsg, _In_ WPARAM wPar
 {
     if (uMsg == WM_NCDESTROY)
     {
-        RemoveWindowSubclass(hWnd, ReBarWindow32SubclassProc, ReBarWindow32SubclassProc);
+        RemoveWindowSubclass(hWnd, ReBarWindow32SubclassProc, (UINT_PTR)ReBarWindow32SubclassProc);
     }
     if (TaskbarCenter_ShouldCenter(dwOldTaskbarAl) && TaskbarCenter_ShouldStartBeCentered(dwOldTaskbarAl) && uMsg == WM_WINDOWPOSCHANGING)
     {
@@ -1974,7 +1986,7 @@ INT64 Shell_TrayWndSubclassProc(
             {
                 UnhookWindowsHookEx(Shell_TrayWndMouseHook);
             }
-            RemoveWindowSubclass(hWnd, Shell_TrayWndSubclassProc, Shell_TrayWndSubclassProc);
+            RemoveWindowSubclass(hWnd, Shell_TrayWndSubclassProc, (UINT_PTR)Shell_TrayWndSubclassProc);
             break;
         }
         case WM_NCLBUTTONDOWN:
@@ -2391,7 +2403,7 @@ INT64 ClockButtonSubclassProc(
 {
     if (uMsg == WM_NCDESTROY)
     {
-        RemoveWindowSubclass(hWnd, ClockButtonSubclassProc, ClockButtonSubclassProc);
+        RemoveWindowSubclass(hWnd, ClockButtonSubclassProc, (UINT_PTR)ClockButtonSubclassProc);
     }
     else if (uMsg == WM_LBUTTONDOWN || (uMsg == WM_KEYDOWN && wParam == VK_RETURN))
     {
@@ -3143,7 +3155,7 @@ BOOL stobject_TrackPopupMenuExHook(
                     unknown_array
                 );
             }
-            SetWindowSubclass(hWnd, OwnerDrawSubclassProc, OwnerDrawSubclassProc, 0);
+            SetWindowSubclass(hWnd, OwnerDrawSubclassProc, (UINT_PTR)OwnerDrawSubclassProc, 0);
         }
         b = TrackPopupMenuEx(
             hMenu,
@@ -3156,7 +3168,7 @@ BOOL stobject_TrackPopupMenuExHook(
         stobject_TrackPopupMenuExElapsed = milliseconds_now();
         if (bSkinMenus)
         {
-            RemoveWindowSubclass(hWnd, OwnerDrawSubclassProc, OwnerDrawSubclassProc);
+            RemoveWindowSubclass(hWnd, OwnerDrawSubclassProc, (UINT_PTR)OwnerDrawSubclassProc);
             if (ImmersiveContextMenuHelper_RemoveOwnerDrawFromMenuFunc)
             {
                 ImmersiveContextMenuHelper_RemoveOwnerDrawFromMenuFunc(
@@ -3205,7 +3217,7 @@ BOOL stobject_TrackPopupMenuHook(
                     unknown_array
                 );
             }
-            SetWindowSubclass(hWnd, OwnerDrawSubclassProc, OwnerDrawSubclassProc, 0);
+            SetWindowSubclass(hWnd, OwnerDrawSubclassProc, (UINT_PTR)OwnerDrawSubclassProc, 0);
         }
         b = TrackPopupMenu(
             hMenu,
@@ -3219,7 +3231,7 @@ BOOL stobject_TrackPopupMenuHook(
         stobject_TrackPopupMenuElapsed = milliseconds_now();
         if (bSkinMenus)
         {
-            RemoveWindowSubclass(hWnd, OwnerDrawSubclassProc, OwnerDrawSubclassProc);
+            RemoveWindowSubclass(hWnd, OwnerDrawSubclassProc, (UINT_PTR)OwnerDrawSubclassProc);
             if (ImmersiveContextMenuHelper_RemoveOwnerDrawFromMenuFunc)
             {
                 ImmersiveContextMenuHelper_RemoveOwnerDrawFromMenuFunc(
@@ -3267,7 +3279,7 @@ BOOL bthprops_TrackPopupMenuExHook(
                     unknown_array
                 );
             }
-            SetWindowSubclass(hWnd, OwnerDrawSubclassProc, OwnerDrawSubclassProc, 0);
+            SetWindowSubclass(hWnd, OwnerDrawSubclassProc, (UINT_PTR)OwnerDrawSubclassProc, 0);
         }
         b = TrackPopupMenuEx(
             hMenu,
@@ -3280,7 +3292,7 @@ BOOL bthprops_TrackPopupMenuExHook(
         bthprops_TrackPopupMenuExElapsed = milliseconds_now();
         if (bSkinMenus)
         {
-            RemoveWindowSubclass(hWnd, OwnerDrawSubclassProc, OwnerDrawSubclassProc);
+            RemoveWindowSubclass(hWnd, OwnerDrawSubclassProc, (UINT_PTR)OwnerDrawSubclassProc);
             if (ImmersiveContextMenuHelper_RemoveOwnerDrawFromMenuFunc)
             {
                 ImmersiveContextMenuHelper_RemoveOwnerDrawFromMenuFunc(
@@ -3426,13 +3438,13 @@ BOOL WINAPI DisableImmersiveMenus_SystemParametersInfoW(
 #pragma region "Explorer: Hide search bar, hide icon and/or title, Mica effect, hide navigation bar"
 inline BOOL IsRibbonEnabled(HWND hWnd)
 {
-    return GetPropW(hWnd, (LPCWSTR)0xA91C);
+    return GetPropW(hWnd, (LPCWSTR)0xA91C) != NULL;
 }
 
 inline BOOL ShouldApplyMica(HWND hWnd)
 {
     if (!IsRibbonEnabled(hWnd)) return TRUE;
-    return FindWindowExW(hWnd, NULL, L"Windows.UI.Composition.DesktopWindowContentBridge", NULL);
+    return FindWindowExW(hWnd, NULL, L"Windows.UI.Composition.DesktopWindowContentBridge", NULL) != NULL;
 }
 
 HRESULT ApplyMicaToExplorerTitlebar(HWND hWnd, DWORD_PTR bMicaEffectOnTitleBarOrig)
@@ -3453,7 +3465,7 @@ HRESULT ApplyMicaToExplorerTitlebar(HWND hWnd, DWORD_PTR bMicaEffectOnTitleBarOr
     if (bShouldApplyMica)
     {
         DwmExtendFrameIntoClientArea(hWndRoot, &pMarInset);
-        SetPropW(hWndRoot, L"EP_METB", TRUE);
+        SetPropW(hWndRoot, L"EP_METB", (HANDLE)(INT_PTR)TRUE);
     }
     else
     {
@@ -3462,24 +3474,24 @@ HRESULT ApplyMicaToExplorerTitlebar(HWND hWnd, DWORD_PTR bMicaEffectOnTitleBarOr
     return SetMicaMaterialForThisWindow(hWndRoot, bShouldApplyMica);
 }
 
-LRESULT RebarWindow32MicaTitlebarSubclassproc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+LRESULT CALLBACK RebarWindow32MicaTitlebarSubclassproc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
 {
-    if (uMsg == RB_SETWINDOWTHEME && !wcsncmp(lParam, L"DarkMode", 8) && dwRefData != 2 && ShouldApplyMica(GetAncestor(hWnd, GA_ROOT)))
+    if (uMsg == RB_SETWINDOWTHEME && lParam && !wcsncmp((LPCWSTR)lParam, L"DarkMode", 8) && dwRefData != 2 && ShouldApplyMica(GetAncestor(hWnd, GA_ROOT)))
     {
-        lParam = wcsstr(lParam, L"NavbarComposited");
+        lParam = (LPARAM)wcsstr((LPCWSTR)lParam, L"NavbarComposited");
     }
     else if (uMsg == WM_DESTROY)
     {
-        RemoveWindowSubclass(hWnd, RebarWindow32MicaTitlebarSubclassproc, RebarWindow32MicaTitlebarSubclassproc);
+        RemoveWindowSubclass(hWnd, RebarWindow32MicaTitlebarSubclassproc, (UINT_PTR)RebarWindow32MicaTitlebarSubclassproc);
     }
     return DefSubclassProc(hWnd, uMsg, wParam, lParam);
 }
 
-LRESULT ExplorerMicaTitlebarSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+LRESULT CALLBACK ExplorerMicaTitlebarSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
 {
     if (uMsg == WM_DESTROY)
     {
-        RemoveWindowSubclass(hWnd, ExplorerMicaTitlebarSubclassProc, ExplorerMicaTitlebarSubclassProc);
+        RemoveWindowSubclass(hWnd, ExplorerMicaTitlebarSubclassProc, (UINT_PTR)ExplorerMicaTitlebarSubclassProc);
     }
     if (uMsg == WM_ERASEBKGND)
     {
@@ -3507,10 +3519,10 @@ LRESULT ExplorerMicaTitlebarSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
     {
         if (LOWORD(wParam) == WM_CREATE)
         {
-            ATOM atom = GetClassWord(lParam, GCW_ATOM);
+            ATOM atom = GetClassWord((HWND)lParam, GCW_ATOM);
             if (atom == RegisterWindowMessageW(L"ReBarWindow32"))
             {
-                SetWindowSubclass(lParam, RebarWindow32MicaTitlebarSubclassproc, RebarWindow32MicaTitlebarSubclassproc, dwRefData);
+                SetWindowSubclass((HWND)lParam, RebarWindow32MicaTitlebarSubclassproc, (UINT_PTR)RebarWindow32MicaTitlebarSubclassproc, dwRefData);
             }
         }
     }
@@ -3521,7 +3533,7 @@ LRESULT CALLBACK HideIconAndTitleInExplorerSubClass(HWND hWnd, UINT uMsg, WPARAM
 {
     if (uMsg == WM_DESTROY)
     {
-        RemoveWindowSubclass(hWnd, HideIconAndTitleInExplorerSubClass, HideIconAndTitleInExplorerSubClass);
+        RemoveWindowSubclass(hWnd, HideIconAndTitleInExplorerSubClass, (UINT_PTR)HideIconAndTitleInExplorerSubClass);
     }
     else if (uMsg == WM_PARENTNOTIFY)
     {
@@ -3594,15 +3606,15 @@ HWND WINAPI explorerframe_SHCreateWorkerWindowHook(
     {
         if (bHideIconAndTitleInExplorer)
         {
-            SetWindowSubclass(hWndParent, HideIconAndTitleInExplorerSubClass, HideIconAndTitleInExplorerSubClass, 0);
+            SetWindowSubclass(hWndParent, HideIconAndTitleInExplorerSubClass, (UINT_PTR)HideIconAndTitleInExplorerSubClass, 0);
         }
         if ((!bIsExplorerProcess || dwFileExplorerCommandUI == 2) && bMicaEffectOnTitlebar)
         {
-            SetWindowSubclass(result, ExplorerMicaTitlebarSubclassProc, ExplorerMicaTitlebarSubclassProc, bMicaEffectOnTitlebar);
+            SetWindowSubclass(result, ExplorerMicaTitlebarSubclassProc, (UINT_PTR)ExplorerMicaTitlebarSubclassProc, bMicaEffectOnTitlebar);
         }
         if (bHideExplorerSearchBar)
         {
-            SetWindowSubclass(hWndParent, HideExplorerSearchBarSubClass, HideExplorerSearchBarSubClass, 0);
+            SetWindowSubclass(hWndParent, HideExplorerSearchBarSubClass, (UINT_PTR)HideExplorerSearchBarSubClass, 0);
         }
         if (bIsExplorerProcess && (dwFileExplorerCommandUI == 1 || dwFileExplorerCommandUI == 2 || dwFileExplorerCommandUI == 3) && IsWindows11Version22H2OrHigher())
         {
@@ -3611,7 +3623,7 @@ HWND WINAPI explorerframe_SHCreateWorkerWindowHook(
             if (!ShouldAppsUseDarkMode)
             {
                 HANDLE hUxtheme = LoadLibraryExW(L"uxtheme.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
-                ShouldAppsUseDarkMode = GetProcAddress(hUxtheme, (LPCSTR)0x84);
+                ShouldAppsUseDarkMode = (ShouldAppsUseDarkMode_t)GetProcAddress(hUxtheme, (LPCSTR)0x84);
             }
             if (ShouldAppsUseDarkMode)
             {
@@ -5027,7 +5039,7 @@ INT64 PeopleButton_SubclassProc(
 {
     if (uMsg == WM_NCDESTROY)
     {
-        RemoveWindowSubclass(hWnd, PeopleButton_SubclassProc, PeopleButton_SubclassProc);
+        RemoveWindowSubclass(hWnd, PeopleButton_SubclassProc, (UINT_PTR)PeopleButton_SubclassProc);
         /*AcquireSRWLockExclusive(&lock_epw);
         if (epw)
         {
@@ -5154,7 +5166,7 @@ BOOL explorer_SetChildWindowNoActivateHook(HWND hWnd)
                     VirtualProtect(Instance + off_PeopleButton_OnClick, sizeof(uintptr_t), dwOldProtect, &dwOldProtect);
 
                     PeopleButton_LastHWND = hWnd;
-                    SetWindowSubclass(hWnd, PeopleButton_SubclassProc, PeopleButton_SubclassProc, 0);
+                    SetWindowSubclass(hWnd, PeopleButton_SubclassProc, (UINT_PTR)PeopleButton_SubclassProc, 0);
 
                     EnterCriticalSection(&lock_epw);
                     if (!epw)
@@ -5216,7 +5228,7 @@ INT64 ShowDesktopSubclassProc(
     {
         case WM_NCDESTROY:
         {
-            RemoveWindowSubclass(hWnd, ShowDesktopSubclassProc, ShowDesktopSubclassProc);
+            RemoveWindowSubclass(hWnd, ShowDesktopSubclassProc, (UINT_PTR)ShowDesktopSubclassProc);
             break;
         }
         case WM_PAINT:
@@ -5663,7 +5675,6 @@ void WINAPI LoadSettings(LPARAM lParam)
 {
     BOOL bIsExplorer = LOWORD(lParam);
     BOOL bIsRefreshAllowed = HIWORD(lParam);
-    if (bIsExplorer) GRMigrateBrand(!bIsRefreshAllowed);
     DWORD dwRefreshUIMask = REFRESHUI_NONE;
 
     HKEY hKey = NULL;
@@ -6264,6 +6275,8 @@ void WINAPI LoadSettings(LPARAM lParam)
                 CreateBuiltinOrbImage(dwTemp, &image);
             }
             AcquireSRWLockExclusive(&customOrbLock);
+            GRClearStartIconCache(&customOrbRenderCache);
+            customOrbSizing = GRReadStartIconSizing();
             if (customOrb.bitmap) DeleteObject(customOrb.bitmap);
             customOrb = image;
             ReleaseSRWLockExclusive(&customOrbLock);
@@ -6912,6 +6925,7 @@ void WINAPI LoadSettings(LPARAM lParam)
             }
             if (dwRefreshUIMask & REFRESHUI_ORB)
             {
+                EnumWindows(GRRefreshStartButtonWindow, 0);
                 InvalidateRect(FindWindowW(L"GRTaskbar_GUI_" _T(EP_CLSID), NULL), NULL, FALSE);
             }
             if (dwRefreshUIMask & REFRESHUI_PEOPLE)
@@ -7308,24 +7322,24 @@ HWND CreateWindowExWHook(
 #if WITH_MAIN_PATCHER
     if (bIsExplorerProcess && (*((WORD*)&(lpClassName)+1)) && (!wcscmp(lpClassName, L"TrayClockWClass") || !wcscmp(lpClassName, L"ClockButton")))
     {
-        SetWindowSubclass(hWnd, ClockButtonSubclassProc, ClockButtonSubclassProc, 0);
+        SetWindowSubclass(hWnd, ClockButtonSubclassProc, (UINT_PTR)ClockButtonSubclassProc, 0);
     }
     else if (bIsExplorerProcess && (*((WORD*)&(lpClassName)+1)) && !wcscmp(lpClassName, L"TrayShowDesktopButtonWClass"))
     {
-        SetWindowSubclass(hWnd, ShowDesktopSubclassProc, ShowDesktopSubclassProc, 0);
+        SetWindowSubclass(hWnd, ShowDesktopSubclassProc, (UINT_PTR)ShowDesktopSubclassProc, 0);
     }
     else if (bIsExplorerProcess && (*((WORD*)&(lpClassName)+1)) && !wcscmp(lpClassName, L"Shell_TrayWnd"))
     {
-        SetWindowSubclass(hWnd, Shell_TrayWndSubclassProc, Shell_TrayWndSubclassProc, TRUE);
+        SetWindowSubclass(hWnd, Shell_TrayWndSubclassProc, (UINT_PTR)Shell_TrayWndSubclassProc, TRUE);
         Shell_TrayWndMouseHook = SetWindowsHookExW(WH_MOUSE, Shell_TrayWndMouseProc, NULL, GetCurrentThreadId());
     }
     else if (bIsExplorerProcess && (*((WORD*)&(lpClassName)+1)) && !wcscmp(lpClassName, L"Shell_SecondaryTrayWnd"))
     {
-        SetWindowSubclass(hWnd, Shell_TrayWndSubclassProc, Shell_TrayWndSubclassProc, FALSE);
+        SetWindowSubclass(hWnd, Shell_TrayWndSubclassProc, (UINT_PTR)Shell_TrayWndSubclassProc, FALSE);
     }
     else if (bIsExplorerProcess && (*((WORD*)&(lpClassName)+1)) && !_wcsicmp(lpClassName, L"ReBarWindow32") && hWndParent == FindWindowW(L"Shell_TrayWnd", NULL))
     {
-        SetWindowSubclass(hWnd, ReBarWindow32SubclassProc, ReBarWindow32SubclassProc, FALSE);
+        SetWindowSubclass(hWnd, ReBarWindow32SubclassProc, (UINT_PTR)ReBarWindow32SubclassProc, FALSE);
     }
 #endif
     /*
@@ -7422,43 +7436,43 @@ HRESULT explorer_SetWindowThemeHook(
     return explorer_SetWindowThemeFunc(hwnd, pszSubAppName, pszSubIdList);
 }
 
-static BOOL DrawCustomOrb(HDC hdc, LPCRECT rect, LPCRECT clip, int state)
+// GR Taskbar native Start button visual state. No replacement window or input interception.
+static HWND GRResolveStartButton(HWND hwnd, HDC dc)
 {
+    HWND candidate = IsWindow(hwnd) ? hwnd : WindowFromDC(dc);
+    WCHAR name[64];
+    for (HWND w = candidate; w; w = GetParent(w))
+    {
+        if (!GetClassNameW(w, name, ARRAYSIZE(name))) break;
+        if (!wcscmp(name, L"Start")) return w;
+        if (!wcscmp(name, L"Shell_TrayWnd") || !wcscmp(name, L"Shell_SecondaryTrayWnd"))
+            return FindWindowExW(w, NULL, L"Start", NULL);
+    }
+    return NULL;
+}
+static BOOL DrawCustomOrb(HDC hdc, LPCRECT rect, LPCRECT clip, int state, const OrbInfo* orb)
+{
+    if (!rect) return FALSE;
+    UINT dpi = orb->dpi ? orb->dpi : 96;
+    HWND start = GRResolveStartButton(orb->hwnd, hdc);
+    RECT button = GRStartIconButtonBounds(hdc, start ? start : orb->hwnd, *rect, &dpi);
     BOOL drawn = FALSE;
     AcquireSRWLockExclusive(&customOrbLock);
-    if (customOrb.bitmap && rect->right > rect->left && rect->bottom > rect->top)
+    if (customOrb.bitmap)
     {
-        int width = rect->right - rect->left;
-        int height = rect->bottom - rect->top;
-        int scaledWidth = MulDiv(height, customOrb.width, customOrb.frameHeight);
-        if (scaledWidth <= width)
-            width = max(1, scaledWidth);
-        else
-            height = max(1, MulDiv(width, customOrb.frameHeight, customOrb.width));
-
-        HDC source = CreateCompatibleDC(hdc);
+        RECT target = GRStartIconLayout(button, customOrb.contentBounds, dpi, customOrbSizing);
         int saved = SaveDC(hdc);
-        if (source && saved)
+        if (saved)
         {
-            HGDIOBJ old = SelectObject(source, customOrb.bitmap);
-            if (old)
-            {
-                int frame = state == 2 ? 1 : state == 3 ? 2 : 0;
-                if (clip) IntersectClipRect(hdc, clip->left, clip->top, clip->right, clip->bottom);
-                BLENDFUNCTION blend = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
-                drawn = GdiAlphaBlend(hdc, rect->left + (rect->right - rect->left - width) / 2,
-                    rect->top + (rect->bottom - rect->top - height) / 2, width, height, source,
-                    0, frame * customOrb.frameHeight, customOrb.width, customOrb.frameHeight, blend);
-                SelectObject(source, old);
-            }
+            IntersectClipRect(hdc, button.left, button.top, button.right, button.bottom);
+            if (clip) IntersectClipRect(hdc, clip->left, clip->top, clip->right, clip->bottom);
+            drawn = GRDrawOrbFrame(hdc, &customOrb, &customOrbRenderCache, target, GRStartIconFrame(state));
+            RestoreDC(hdc, saved);
         }
-        if (saved) RestoreDC(hdc, saved);
-        if (source) DeleteDC(source);
     }
     ReleaseSRWLockExclusive(&customOrbLock);
     return drawn;
 }
-
 HDPA hOrbCollection = NULL;
 HRESULT explorer_DrawThemeBackground(
     HTHEME  hTheme,
@@ -7484,7 +7498,7 @@ HRESULT explorer_DrawThemeBackground(
                 if (dwOrbStyle == ORB_STYLE_CUSTOM || dwOrbStyle == ORB_STYLE_WINDOWS10 ||
                     dwOrbStyle == ORB_STYLE_WINDOWS11 || dwOrbStyle == ORB_STYLE_WINDOWS7 || dwOrbStyle == ORB_STYLE_WINDOWSXP)
                 {
-                    if (DrawCustomOrb(hdc, pRect, pClipRect, iStateId))
+                    if (DrawCustomOrb(hdc, pRect, pClipRect, iStateId, oi))
                         return S_OK;
                     break;
                 }
@@ -7634,6 +7648,7 @@ HTHEME explorer_OpenThemeDataForDpi(
             if (oi)
             {
                 oi->hTheme = hTheme;
+                oi->hwnd = hwnd;
                 oi->taskbarBackground = taskbarBackground;
                 oi->dpi = dpi;
                 //printf(">>> APPEND DPA %p %d\n", oi->hTheme, oi->dpi);

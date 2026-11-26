@@ -8,7 +8,7 @@ Windows desktop customization maintained by **GR Studios AI LLC**.
 
 ## Current build
 
-Version **26100.9711.71.8** is a development build. Save open work before
+Version **26100.9711.71.10** is a development build. Save open work before
 installing: setup restarts Windows Explorer. Use `ep_setup.exe` on Intel/AMD
 Windows; ARM64 releases use `ep_setup_arm64.exe` when available.
 
@@ -38,6 +38,22 @@ Start icon selection is independent of Start menu and taskbar styles. Actual
 replacement uses a Windows 10 taskbar implementation, including the integrated
 alternate taskbar. It does not replace the native Windows 11 XAML Start button.
 
+## Start icon sizing
+
+The **Start icon** page includes **Automatic**, **Small (16 px)**,
+**Medium (24 px)**, **Large (32 px)** and **Custom (16–48 px)** sizing, plus
+**Reset to default**. Values are logical pixels: the selected size follows
+Windows display scaling independently on each monitor. Automatic is 24 logical
+pixels on a standard 40-logical-pixel taskbar and adapts to other button sizes.
+
+Artwork is centered, aspect-preserving and fitted inside the full Start button,
+not the smaller theme-glyph rectangle. A common alpha bound removes transparent
+margins without shifting or clipping normal, hover, pressed and active states.
+Images use premultiplied-alpha WIC resampling; ICO files use their highest-resolution
+usable frame. PNG inputs up to 4096 pixels wide are normalized to a bounded
+high-resolution working image. Oversized custom choices are constrained to the
+available Start button space. Size changes are persistent and repaint primary
+and secondary taskbars without a Windows restart.
 ## Appearance and custom themes
 
 The **Themes** page has a preset dropdown, custom taskbar color pickers,
@@ -68,18 +84,14 @@ XP Explorer icon packs, XP Start menu layouts and direct Open-Shell/RetroBar
 skin imports remain outside the implemented feature set. Do not describe this
 build as having those features.
 
-## Upgrading from the earlier build
+## Settings and updates
 
 The installer and UI are branded **GR Taskbar**, published by **GR Studios AI LLC**.
-The main installed folder is `%PROGRAMFILES%\GR-Taskbar`. Legacy settings and
-saved icon/theme libraries are imported without overwriting settings already
-chosen in GR Taskbar. Legacy local data is retained as a rollback backup.
-The retained component CLSID allows servicing the existing installation.
-
-Update defaults point to `GRStudiosAI/GR-Taskbar`. The release asset names remain
-`ep_setup.exe` and `ep_setup_arm64.exe` for updater compatibility. The separately
-provided `GR-Taskbar-Setup-26100.9711.71.8.exe` is the same x64 installer.
-
+The installed folder is `%PROGRAMFILES%\GR-Taskbar`; configuration uses
+`HKCU\Software\GR-Taskbar`. Current GR Taskbar icon libraries and customization
+settings remain supported. Obsolete first-brand migration code was removed.
+Update defaults point to `GRStudiosAI/GR-Taskbar`. Release asset names remain
+`ep_setup.exe` and `ep_setup_arm64.exe` for the GR Taskbar updater protocol.
 ## Build and publish
 
 Open `GR-Taskbar.sln` with Visual Studio 2026 and the Windows C++ workload.
@@ -102,3 +114,4 @@ remove them.
 
 [CHANGELOG.md](CHANGELOG.md) describes GR Taskbar changes. Funding configuration
 is maintained separately by the project owner.
+Installer servicing now stages files, retains rollback backups and logs native Windows errors under %LOCALAPPDATA%\GR-Taskbar\Logs. Read [INSTALLER-SERVICING.md](INSTALLER-SERVICING.md) for recovery behavior and verification limits.

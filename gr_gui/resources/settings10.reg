@@ -654,10 +654,10 @@ Windows Registry Editor Version 5.00
 ;T %R:2001%
 ;e GR Taskbar
 ;e %VERSIONINFORMATIONSTRING%
-;t Developed and maintained by GR Studios.
+;t Original GR Taskbar modifications by GR Studios AI LLC.
 ;t Business website: grstudios.shop
 ;t %OSVERSIONSTRING%
-;y GR Studios website
+;y GR Studios AI LLC website
 ;https://grstudios.shop
 ;u License
 ;legal_notices

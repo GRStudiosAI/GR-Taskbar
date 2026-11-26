@@ -3,7 +3,6 @@ DEFINE_GUID(LiveSetting_Property_GUID, 0xc12bcd8e, 0x2a8e, 0x4950, 0x8a, 0xe7, 0
 #include <oleacc.h>
 #include "GUI.h"
 #include "../GR-Taskbar/CustomOrb.h"
-#include "../GR-Taskbar/BrandMigration.h"
 
 TCHAR GUI_title[260];
 FILE* AuditFile = NULL;
@@ -114,7 +113,7 @@ BOOL GUI_Internal_DeleteWeatherFolder(int* res)
 void PlayHelpMessage(GUI* _this)
 {
     unsigned int max_section = 0;
-    for (unsigned int i = 0; i < 100; ++i)
+    for (unsigned int i = 0; i < ARRAYSIZE(_this->sectionNames); ++i)
     {
         if (_this->sectionNames[i][0] == 0)
         {
@@ -140,7 +139,7 @@ void PlayHelpMessage(GUI* _this)
         1,
         max_section + 1
     );
-    for (unsigned int i = 0; i < 100; ++i)
+    for (unsigned int i = 0; i < ARRAYSIZE(_this->sectionNames); ++i)
     {
         if (_this->sectionNames[i][0] == 0)
         {
@@ -1041,6 +1040,22 @@ static BOOL GUI_Build(HDC hDC, HWND hwnd, POINT pt)
         );
     }
 
+    // Populate page titles before drawing the header, using the same resource stream.
+    ZeroMemory(_this->sectionNames, sizeof(_this->sectionNames));
+    FILE* titleStream = fmemopen(pRscr, cbRscr, "r");
+    if (titleStream) {
+        char* titleLine = NULL; size_t titleCapacity = 0; size_t page = 0;
+        while (getline(&titleLine, &titleCapacity, titleStream) != -1 && page < ARRAYSIZE(_this->sectionNames)) {
+            if (!strncmp(titleLine, ";T ", 3)) {
+                WCHAR label[MAX_LINE_LENGTH] = {0};
+                MultiByteToWideChar(CP_UTF8, 0, titleLine + 3, -1, label, ARRAYSIZE(label));
+                GUI_SubstituteLocalizedString(label, ARRAYSIZE(label));
+                label[wcscspn(label, L"\r\n")] = 0;
+                wcsncpy_s(_this->sectionNames[page++], 64, label, _TRUNCATE);
+            }
+        }
+        free(titleLine); fclose(titleStream);
+    }
     UINT dpiX = 0, dpiY = 0;
     HRESULT hr = GetDpiForMonitor(MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY), MDT_DEFAULT, &dpiX, &dpiY);
     LOGFONT logFont;
@@ -1135,7 +1150,7 @@ static BOOL GUI_Build(HDC hDC, HWND hwnd, POINT pt)
             SelectObject(hdcPaint, subtitleFont);
             brand.top = 33 * dy; brand.bottom = 49 * dy;
             SetTextColor(hdcPaint, g_darkModeEnabled ? RGB(146, 163, 188) : RGB(77, 96, 123));
-            DrawTextW(hdcPaint, L"GR STUDIOS  |  grstudios.shop", -1, &brand, DT_SINGLELINE);
+            DrawTextW(hdcPaint, L"GR STUDIOS AI LLC", -1, &brand, DT_SINGLELINE);
             SelectObject(hdcPaint, heading);
             RECT pageHeading = { dwLeftPad + _this->padding.left, 10 * dy, rc.right - 24 * dx, 35 * dy };
             SetTextColor(hdcPaint, g_darkModeEnabled ? RGB(234, 241, 252) : RGB(23, 38, 58));
@@ -1144,7 +1159,7 @@ static BOOL GUI_Build(HDC hDC, HWND hwnd, POINT pt)
             SelectObject(hdcPaint, subtitleFont);
             pageHeading.top = 38 * dy; pageHeading.bottom = 55 * dy;
             SetTextColor(hdcPaint, g_darkModeEnabled ? RGB(146, 163, 188) : RGB(77, 96, 123));
-            DrawTextW(hdcPaint, L"GR Studios  |  grstudios.shop", -1, &pageHeading, DT_SINGLELINE);
+            DrawTextW(hdcPaint, L"GR Studios AI LLC  |  grstudios.shop", -1, &pageHeading, DT_SINGLELINE);
             SelectObject(hdcPaint, old);
             DeleteObject(heading);
             DeleteObject(subtitleFont);
@@ -1329,7 +1344,7 @@ static BOOL GUI_Build(HDC hDC, HWND hwnd, POINT pt)
                     // Resource lines include CR/LF. Store clean labels so page
                     // identity checks (including the embedded icon gallery) work.
                     text[wcscspn(text, L"\r\n")] = 0;
-                    if (_this->sectionNames[currentSection + 1][0] == 0)
+                    if (currentSection + 1 < ARRAYSIZE(_this->sectionNames))
                     {
                         wcscpy_s(_this->sectionNames[currentSection + 1], 64, text);
                     }
@@ -2091,7 +2106,7 @@ static BOOL GUI_Build(HDC hDC, HWND hwnd, POINT pt)
                                 ChooseCustomOrb(hwnd);
                             }
                             else if (!strcmp(line + 1, "theme_apply")) ThemeApplySelectedPreset(hwnd);
-                            else if (!strcmp(line + 1, "legal_notices")) MessageBoxW(hwnd, L"GR Taskbar is a modified GPL-2.0 distribution by GR Studios (2026).\n\nBased on ExplorerPatcher. Copyright (C) 2006-2026 VALINET Solutions SRL and other contributors. Existing copyright notices remain applicable.\n\nThis software comes without warranty. The GNU GPL version 2 and the corresponding source are supplied with the project.\n\nGR Studios: https://grstudios.shop", L"GR Taskbar - License", MB_OK | MB_ICONINFORMATION);
+                            else if (!strcmp(line + 1, "legal_notices")) MessageBoxW(hwnd, L"GR Taskbar is a modified GPL-2.0 distribution by GR Studios AI LLC (2026).\n\nBased on ExplorerPatcher. Copyright (C) 2006-2026 VALINET Solutions SRL and other contributors. Existing copyright notices remain applicable.\n\nThis software comes without warranty. The GNU GPL version 2 and the corresponding source are supplied with the project.\n\nGR Studios AI LLC: https://grstudios.shop", L"GR Taskbar - License", MB_OK | MB_ICONINFORMATION);
                             else if (!strcmp(line + 1, "theme_luna")) ThemePreset(hwnd, 0);
                             else if (!strcmp(line + 1, "theme_royale")) ThemePreset(hwnd, 1);
                             else if (!strcmp(line + 1, "theme_classic")) ThemePreset(hwnd, 2);
@@ -3335,8 +3350,8 @@ static BOOL GUI_Build(HDC hDC, HWND hwnd, POINT pt)
 
         if (_this->bShouldAnnounceSelected)
         {
-            int max_section = 100;
-            for (unsigned int i = 0; i < 100; ++i)
+            int max_section = 19;
+            for (unsigned int i = 0; i < ARRAYSIZE(_this->sectionNames); ++i)
             {
                 if (_this->sectionNames[i][0] == 0)
                 {
@@ -3765,9 +3780,9 @@ LRESULT CALLBACK GUI_WndProc(GUI* pThis, HWND hWnd, UINT uMsg, WPARAM wParam, LP
                 case VK_RIGHT:
                 {
                     int min_section = 0;
-                    int max_section = 100;
+                    int max_section = 19;
                     int new_section = pThis->section;
-                    for (unsigned int i = 0; i < 100; ++i)
+                    for (unsigned int i = 0; i < ARRAYSIZE(pThis->sectionNames); ++i)
                     {
                         if (pThis->sectionNames[i][0] == 0)
                         {
@@ -3824,8 +3839,8 @@ LRESULT CALLBACK GUI_WndProc(GUI* pThis, HWND hWnd, UINT uMsg, WPARAM wParam, LP
                 || wParam == MapVirtualKeyW(0x0D, MAPVK_VSC_TO_VK_EX))
             {
                 int min_section = 0;
-                int max_section = 100;
-                for (unsigned int i = 0; i < 100; ++i)
+                int max_section = 19;
+                for (unsigned int i = 0; i < ARRAYSIZE(pThis->sectionNames); ++i)
                 {
                     if (pThis->sectionNames[i][0] == 0)
                     {
@@ -4144,7 +4159,6 @@ LRESULT CALLBACK s_GUI_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 
 __declspec(dllexport) int ZZGUI(HWND hWnd, HINSTANCE hInstance, LPSTR lpszCmdLine, int nCmdShow)
 {
-    GRMigrateBrand(FALSE);
     HWND hOther = NULL;
     if (hOther = FindWindowW(L"GRTaskbar_GUI_" _T(EP_CLSID), NULL))
     {
@@ -4281,12 +4295,8 @@ __declspec(dllexport) int ZZGUI(HWND hWnd, HINSTANCE hInstance, LPSTR lpszCmdLin
     wc.hInstance = hModule;
     wc.lpszClassName = L"GRTaskbar_GUI_" _T(EP_CLSID);
     wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
-    HMODULE hShell32 = LoadLibraryExW(wszPath, NULL, LOAD_LIBRARY_AS_DATAFILE);
-    if (hShell32)
-    {
-        _this.hIcon = LoadIconW(hShell32, MAKEINTRESOURCEW(40)); //40
-        wc.hIcon = _this.hIcon;
-    }
+    _this.hIcon = LoadIconW(hModule, MAKEINTRESOURCEW(IDI_GR_TASKBAR));
+    wc.hIcon = _this.hIcon;
     RegisterClassW(&wc);
 
     _this.hExplorerFrame = LoadLibraryExW(L"ExplorerFrame.dll", NULL, LOAD_LIBRARY_AS_DATAFILE);
@@ -4343,7 +4353,7 @@ __declspec(dllexport) int ZZGUI(HWND hWnd, HINSTANCE hInstance, LPSTR lpszCmdLin
     HWND hwnd = CreateWindowEx(
         NULL,
         L"GRTaskbar_GUI_" _T(EP_CLSID),
-        L"GR Taskbar Settings",
+        L"GR Settings",
         WS_SYSMENU | WS_CAPTION | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_THICKFRAME | WS_CLIPCHILDREN,
         0,
         0,
@@ -4356,6 +4366,10 @@ __declspec(dllexport) int ZZGUI(HWND hWnd, HINSTANCE hInstance, LPSTR lpszCmdLin
         return 1;
     }
 
+    if (_this.hIcon) {
+        SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)_this.hIcon);
+        SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)_this.hIcon);
+    }
     _this.hAccLabel = CreateWindowExW(
         0,
         L"Static",
@@ -4445,11 +4459,7 @@ __declspec(dllexport) int ZZGUI(HWND hWnd, HINSTANCE hInstance, LPSTR lpszCmdLin
         FreeLibrary(_this.hExplorerFrame);
     }
 
-    if (hShell32)
-    {
-        CloseHandle(_this.hIcon);
-        FreeLibrary(hShell32);
-    }
+    // LoadIconW returns a shared icon; do not destroy it.
 
     if (bHasLoadedUxtheme && hUxtheme)
     {

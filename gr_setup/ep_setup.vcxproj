@@ -248,6 +248,8 @@
   <ItemGroup>
     <ClCompile Include="..\GR-Taskbar\utility.c" />
     <ClCompile Include="ep_setup.c" />
+    <ClInclude Include="Servicing.h" />
+    <ClInclude Include="InstallerBranding.h" />
     <ClCompile Include="..\libs\zlib\contrib\minizip\ioapi.c" />
     <ClCompile Include="..\libs\zlib\contrib\minizip\unzip.c">
       <PreprocessorDefinitions>NOCRYPT;NOUNCRYPT;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -289,6 +291,7 @@
     <PackFile Include="..\build\$(Configuration)\$(Platform)\ep_taskbar.ge.dll" Condition="Exists('$(SolutionDir)\build\$(Configuration)\$(Platform)\ep_taskbar.ge.dll')" />
     <PackFile Include="..\build\$(Configuration)\$(Platform)\ep_weather_host.dll" Condition="Exists('$(SolutionDir)\build\$(Configuration)\$(Platform)\ep_weather_host.dll')" />
     <PackFile Include="..\build\$(Configuration)\$(Platform)\ep_weather_host_stub.dll" Condition="Exists('$(SolutionDir)\build\$(Configuration)\$(Platform)\ep_weather_host_stub.dll')" />
+    <PackFile Include="..\build\$(Configuration)\$(Platform)\GR-Taskbar.cat" Condition="'$(GRIncludeCatalog)' == 'true'" />
     <PackFile Include="..\LICENSE" />
   </ItemGroup>
   <Target Name="GetCommitHash" AfterTargets="PrepareForBuild">
@@ -373,6 +376,11 @@
     <DownloadFile DestinationFolder="..\build\$(Configuration)\$(Platform)\gr_setup_files\JumpViewUI" DestinationFileName="JumpViewUI.dll" SourceUrl="https://msdl.microsoft.com/download/symbols/jumpviewui.dll/C814664216A000/jumpviewui.dll" SkipUnchangedFiles="true" Retries="3" Condition="'$(Platform)' == 'x64'" />
     <DownloadFile DestinationFolder="..\build\$(Configuration)\$(Platform)\gr_setup_files\JumpViewUI" DestinationFileName="JumpViewUI.dll" SourceUrl="https://msdl.microsoft.com/download/symbols/jumpviewui.dll/45558FDB1E9000/jumpviewui.dll" SkipUnchangedFiles="true" Retries="3" Condition="'$(Platform)' == 'ARM64'" />
     <Copy SourceFiles="@(PackFile)" DestinationFolder="..\build\$(Configuration)\$(Platform)\gr_setup_files\%(RecursiveDir)" />
+    <ItemGroup>
+      <GROrbFile Include="..\GR-Taskbar\resources\Orbs\**\*.bmp;..\GR-Taskbar\resources\Orbs\**\*.png" Exclude="..\GR-Taskbar\resources\Orbs\Nudes\**\*" />
+    </ItemGroup>
+    <RemoveDir Directories="..\build\$(Configuration)\$(Platform)\gr_setup_files\Orbs" />
+    <Copy SourceFiles="@(GROrbFile)" DestinationFiles="@(GROrbFile->'..\build\$(Configuration)\$(Platform)\gr_setup_files\Orbs\%(RecursiveDir)%(Filename)%(Extension)')" />
     <ZipDirectory SourceDirectory="..\build\$(Configuration)\$(Platform)\gr_setup_files" DestinationFile="..\build\$(Configuration)\$(Platform)\ep_setup_files.zip" Overwrite="true" />
     <EncryptFile OutputFile="..\build\$(Configuration)\$(Platform)\ep_setup_files.zip" EncryptionKey="$(ZipEncryptionKey)" Condition="'$(WithEncryption)' == 'true'" />
     <Copy SourceFiles="..\build\$(Configuration)\$(Platform)\ep_setup_files.zip" DestinationFiles="..\build\$(Configuration)\$(Platform)\ep_setup_files.zip.bin" Condition="'$(WithEncryption)' != 'true'" />
