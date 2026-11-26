@@ -1,77 +1,125 @@
-# GR Taskbar changelog
+# GR Taskbar Changelog
 
-## 26100.9711.71.10 — 2026-11-25
+Developed and maintained by GR Studios AI LLC.
 
-- Replace destructive installer file replacement with staged writes and recoverable same-volume backups.
-- Log operations, paths, native Windows codes and Restart Manager lock owners; display Unicode diagnostics.
-- Close settings gracefully, stop only the validated current-session Explorer shell, retain its user token and verify restart.
-- Retry temporary locks, roll back failed file changes and recover interrupted transactions from a flushed journal.
-- Treat stale .prev files as cleanup; queue locked backup deletion at reboot.
-- Queue a complete one-time servicing retry after reboot/admin sign-in when a persistent file lock prevents an update, rather than queuing partial DLL replacements.
-- Preserve settings, custom libraries and unrelated installation files during uninstall; protect Windows components and reject reparse-directory traversal.
-- Add installer file-servicing regression tests. Elevated OS integration and reboot-resume validation remain required before release.
-## 26100.9711.71.9 — 2026-11-25
+## 26100.9711.71.10 — November 25, 2026
 
-- Fixed undersized Start artwork by laying out against the full button bounds.
-- Removed transparent padding using shared bounds across all three image states.
-- Added Automatic, Small, Medium, Large and Custom logical-pixel sizes (16–48),
-  immediate persistence, per-monitor DPI layout and Reset to default.
-- Added cached WIC Fant filtering and highest-resolution ICO frame selection.
-- Increased generated built-in resources to 256px per state and preserved all
-  edge pixels in single-image pressed effects.
-- Added DPI-aware sizing controls and actual-size preview in Start icon settings.
-- Added explicit secondary-taskbar invalidation for immediate sizing changes.
-- Updated original-modification ownership to GR Studios AI LLC; retained GPL v2
-  and all required upstream notices. Windows retro-style options remain intact.
-- Removed obsolete product migration code. Full retro shell, cursor and file-icon
-  theme engines remain pending; current appearance presets are not complete skins.
+### Installer improvements
 
-## 26100.9711.71.8 — 2026-11-25
+- Implemented staged file replacement with recoverable backups.
+- Added detailed installer diagnostics and native Windows error logging.
+- Added file-lock detection using Windows Restart Manager.
+- Improved controlled Explorer shutdown and restart.
+- Added automatic retry handling for temporary file locks.
+- Implemented transactional rollback and interrupted installation recovery.
+- Improved obsolete backup file cleanup.
+- Added deferred servicing retries following a system restart.
+- Improved preservation of user settings and custom libraries.
+- Added protection against unintended file deletion.
+- Added installer servicing regression tests.
 
-### Project and branding
+## 26100.9711.71.9 — November 25, 2026
 
-- Renamed the local project to `D:\Projects\GR-Taskbar`.
-- Renamed the main source project, solution and translation folder to GR-Taskbar.
-- Renamed project folder prefixes from `ep_` to `gr_`, retaining their suffixes.
-- Updated solution, resource, installer and workflow references for renamed paths.
-- Updated the origin and updater defaults to GRStudiosAI/GR-Taskbar.
-- Branded settings, installer metadata, app listing and shortcuts as GR Taskbar.
-- Set GR Studios as publisher and grstudios.shop as the business/support website.
-- Consolidated required notices into LICENSE and removed the separate notices file.
-- Rewrote README for the current GR Taskbar feature set. Funding is unchanged.
+### Start icon improvements
 
-### Repairs and compact settings
+- Corrected undersized Start button artwork.
+- Improved artwork positioning and scaling.
+- Added Automatic, Small, Medium, Large and Custom icon sizes.
+- Added configurable icon dimensions from 16 to 48 logical pixels.
+- Added per-monitor DPI-aware rendering.
+- Added immediate configuration persistence.
+- Added Reset to Default functionality.
+- Improved image filtering and ICO frame selection.
+- Increased generated artwork resolution to 256 pixels per state.
+- Added actual-size artwork previews.
+- Improved secondary taskbar refresh handling.
 
-- Trimmed resource-line endings before comparing page names, fixing the missing
-  embedded Start icon library.
-- Added an explicit drag area to the custom window header and resize hit testing.
-- Added a visible scrollbar and thumb/page scrolling for long settings pages.
-- Reduced default size, spacing and typography toward the original compact layout.
-- Replaced separate appearance preset links with one dropdown and an Apply action.
-- Changed retro presets to combined icon buttons without text labels on both
-  primary and secondary taskbars, with a one-time repair of the earlier layout.
+### Project identity
+
+- Updated ownership information for original GR Taskbar modifications.
+- Established GR Studios AI LLC branding.
+- Removed obsolete product migration code.
+
+## 26100.9711.71.8 — November 25, 2026
+
+### Project modernization
+
+- Established the GR Taskbar project directory.
+- Renamed the main source project and solution.
+- Renamed project component directories.
+- Updated solution, resource, installer and workflow references.
+- Configured the GR Taskbar repository and intended update infrastructure.
+- Updated installer metadata and application branding.
+- Updated application shortcuts.
+- Updated business and support website information.
+- Rewrote project documentation.
+
+### Settings improvements
+
+- Corrected embedded Start icon library discovery.
+- Added a draggable custom window header.
+- Improved window resizing.
+- Added visible scrollbars and scrolling controls.
+- Improved interface spacing and typography.
+- Added a consolidated appearance preset selector.
+- Improved retro appearance preset controls.
+- Added secondary taskbar appearance support.
 
 ### Icons and appearance
 
-- Added independent XP, Windows 7, Windows 10 and Windows 11 Start icon choices.
-- Added saved-library imports, duplicate-name preservation and in-place preview.
-- Added PNG/BMP/ICO/JPEG decoding, square-icon effects and three-frame orb support.
-- Hooked theme drawing in the alternate taskbar as well as the main shell.
-- Added validated custom themes, color controls, six appearance profiles and undo.
-- Added legacy settings/library migration for the project rename.
+- Added independent Windows XP, Windows 7, Windows 10 and Windows 11-inspired Start icon options.
+- Added custom artwork importing.
+- Added duplicate filename preservation.
+- Added artwork previews.
+- Added PNG, BMP, ICO and JPEG support.
+- Added three-frame Start icon artwork support.
+- Added generated effects for single-frame artwork.
+- Added customizable appearance profiles.
+- Added custom color controls.
+- Added appearance undo functionality.
+- Added settings and custom artwork migration.
 
-### Current limits
+## 26100.9711.71.6
 
-- Native Windows 11 XAML Start icon replacement is not implemented.
-- Complete XP shell graphics, XP Start menu layouts and Explorer icon packs are
-  not implemented. Presets combine palettes with existing supported options.
-- ARM64 requires the corresponding compiler workload; local validation is x64.
-- Live-shell rendering must be verified after installation of this build.
+- Introduced appearance previews.
+- Introduced the redesigned Settings interface.
+- Expanded desktop appearance customization.
 
-## Earlier development builds
+## 26100.9711.71.4
 
-- 26100.9711.71.6: initial appearance preview and settings redesign.
-- 26100.9711.71.4: first custom-orb installer.
+- Introduced custom Start icon support.
+- Introduced the initial custom Start icon installer.
 
-Earlier upstream development history remains in Git history. Original source
-copyright notices and license terms remain applicable.
+## Latest development progress
+
+### Completed
+
+- Implemented digital signing infrastructure.
+- Expanded GR Taskbar branding.
+- Continued component filename and directory migration.
+
+### In development
+
+- Complete normal, hover, pressed and active Start icon rendering corrections.
+- Remove unwanted black backgrounds from Orbs gallery previews.
+- Eliminate unwanted Start button background overlays.
+- Complete the independent GR Taskbar update system.
+- Remove obsolete files following component renaming.
+- Complete GR Settings branding and interface modernization.
+- Replace the Properties context menu entry with GR Settings.
+- Implement dedicated GR Settings application and taskbar icons.
+- Complete custom installer icon integration.
+- Complete registry-based Settings corrections.
+- Expand Start menu customization.
+- Implement complete Windows XP-inspired retro themes.
+- Implement complete Windows 7-inspired retro themes.
+- Implement Mouse Cursors settings and custom cursor libraries.
+- Expand File Explorer appearance customization.
+- Complete installer, signature and SHA-256 verification.
+- Complete Windows runtime, installation and stability testing.
+
+---
+
+Copyright © 2026 GR Studios AI LLC — Original GR Taskbar development and modifications.
+
+This changelog documents GR Taskbar development exclusively. Applicable third-party license information is maintained separately.
