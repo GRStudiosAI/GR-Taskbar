@@ -18,17 +18,32 @@
       <ExpectedSHA256>3E81CECF171D697DBF08E97CDC0ED60158D6FB405E9897D54890CF20E35EF856</ExpectedSHA256>
     </GRMicrosoftPayload>
   </ItemGroup>
-  <Target Name="AcquireGRMicrosoftPayload" BeforeTargets="CreateZip" Condition="'$(Platform)' == 'x64'">
+  <ItemGroup Condition="'$(Platform)' == 'ARM64'">
+    <GRMicrosoftPayload Include="$(MSBuildProjectDirectory)\..\build\dependency-cache\ARM64\pnidui\pnidui.dll">
+      <Category>pnidui</Category>
+      <SourceUrl>https://msdl.microsoft.com/download/symbols/pnidui.dll/63AF842D210000/pnidui.dll</SourceUrl>
+    </GRMicrosoftPayload>
+    <GRMicrosoftPayload Include="$(MSBuildProjectDirectory)\..\build\dependency-cache\ARM64\StartUI\StartUI.dll">
+      <Category>StartUI</Category>
+      <SourceUrl>https://msdl.microsoft.com/download/symbols/startui.dll/122A50F3AB9000/startui.dll</SourceUrl>
+    </GRMicrosoftPayload>
+    <GRMicrosoftPayload Include="$(MSBuildProjectDirectory)\..\build\dependency-cache\ARM64\JumpViewUI\JumpViewUI.dll">
+      <Category>JumpViewUI</Category>
+      <SourceUrl>https://msdl.microsoft.com/download/symbols/jumpviewui.dll/45558FDB1E9000/jumpviewui.dll</SourceUrl>
+    </GRMicrosoftPayload>
+  </ItemGroup>
+  <Target Name="AcquireGRMicrosoftPayload" Condition="'$(Platform)' == 'x64' Or '$(Platform)' == 'ARM64'">
     <MakeDir Directories="@(GRMicrosoftPayload->'%(RootDir)%(Directory)')" />
     <DownloadFile SourceUrl="%(GRMicrosoftPayload.SourceUrl)"
       DestinationFolder="%(GRMicrosoftPayload.RootDir)%(GRMicrosoftPayload.Directory)"
       DestinationFileName="%(GRMicrosoftPayload.Filename)%(GRMicrosoftPayload.Extension)"
-      Condition="!Exists('%(GRMicrosoftPayload.Identity)')" Retries="3" />
+      Condition="!Exists('%(GRMicrosoftPayload.Identity)')" Retries="8" RetryDelayMilliseconds="15000" />
     <GetFileHash Files="@(GRMicrosoftPayload)" Algorithm="SHA256">
       <Output TaskParameter="Items" ItemName="GRCheckedMicrosoftPayload" />
     </GetFileHash>
-    <Error Condition="'%(GRCheckedMicrosoftPayload.FileHash)' != '%(GRCheckedMicrosoftPayload.ExpectedSHA256)'"
+    <Error Condition="'%(GRCheckedMicrosoftPayload.ExpectedSHA256)' != '' And '%(GRCheckedMicrosoftPayload.FileHash)' != '%(GRCheckedMicrosoftPayload.ExpectedSHA256)'"
       Text="Microsoft payload integrity check failed: %(GRCheckedMicrosoftPayload.Identity). Build stopped; the cached file was not packaged." />
+    <Exec Condition="'$(Platform)' == 'ARM64'" Command="powershell.exe -NoProfile -NonInteractive -Command &quot;$ErrorActionPreference = 'Stop'; $p = '%(GRMicrosoftPayload.FullPath)'; $sig = Get-AuthenticodeSignature -LiteralPath $p; if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation(?:,|$)') { throw ('Microsoft signature validation failed: ' + $p) }; $b = [IO.File]::ReadAllBytes($p); $o = [BitConverter]::ToInt32($b,60); if ([BitConverter]::ToUInt32($b,$o) -ne 17744 -or [BitConverter]::ToUInt16($b,$o+4) -ne 43620) { throw ('Expected ARM64 PE: ' + $p) }&quot;" />
     <Copy SourceFiles="@(GRMicrosoftPayload)"
       DestinationFiles="@(GRMicrosoftPayload->'$(MSBuildProjectDirectory)\..\build\$(Configuration)\$(Platform)\gr_setup_files\%(Category)\%(Filename)%(Extension)')" />
   </Target>

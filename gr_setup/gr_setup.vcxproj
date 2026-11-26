@@ -369,11 +369,8 @@
     </Task>
   </UsingTask>
   <Import Project="MicrosoftPayload.targets" />
-  <Target Name="CreateZip" BeforeTargets="ResourceCompile">
+  <Target Name="CreateZip" BeforeTargets="ResourceCompile" DependsOnTargets="AcquireGRMicrosoftPayload">
     <MakeDir Directories="..\build\$(Configuration)\$(Platform)\gr_setup_files" />
-    <DownloadFile DestinationFolder="..\build\$(Configuration)\$(Platform)\gr_setup_files\pnidui" DestinationFileName="pnidui.dll" SourceUrl="https://msdl.microsoft.com/download/symbols/pnidui.dll/63AF842D210000/pnidui.dll" SkipUnchangedFiles="true" Retries="3" Condition="'$(Platform)' == 'ARM64'" />
-    <DownloadFile DestinationFolder="..\build\$(Configuration)\$(Platform)\gr_setup_files\StartUI" DestinationFileName="StartUI.dll" SourceUrl="https://msdl.microsoft.com/download/symbols/startui.dll/122A50F3AB9000/startui.dll" SkipUnchangedFiles="true" Retries="3" Condition="'$(Platform)' == 'ARM64'" />
-    <DownloadFile DestinationFolder="..\build\$(Configuration)\$(Platform)\gr_setup_files\JumpViewUI" DestinationFileName="JumpViewUI.dll" SourceUrl="https://msdl.microsoft.com/download/symbols/jumpviewui.dll/45558FDB1E9000/jumpviewui.dll" SkipUnchangedFiles="true" Retries="3" Condition="'$(Platform)' == 'ARM64'" />
     <Copy SourceFiles="@(PackFile)" DestinationFolder="..\build\$(Configuration)\$(Platform)\gr_setup_files\%(RecursiveDir)" />
     <ItemGroup>
       <GROrbFile Include="..\GR-Taskbar\resources\Orbs\**\*.bmp;..\GR-Taskbar\resources\Orbs\**\*.png" Exclude="..\GR-Taskbar\resources\Orbs\Nudes\**\*" />
