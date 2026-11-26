@@ -1,44 +1,67 @@
 
-name: GR Taskbar - Source Validation
+name: GR Taskbar - Official Build
 
 on:
+  push:
+    branches:
+      - master
+
   workflow_dispatch:
+    inputs:
+      configuration:
+        description: Build configuration
+        required: true
+        default: Release
+        type: choice
+        options:
+          - Release
+          - Debug
 
 permissions:
   contents: read
 
+concurrency:
+  group: gr-taskbar-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PRODUCT_NAME: GR Taskbar
+  COMPANY_NAME: GR Studios AI LLC
+  BUILD_CONFIGURATION: ${{ inputs.configuration || 'Release' }}
+
 jobs:
-  validate:
-    name: Validate GR Taskbar Source
+  build:
+    name: Build GR Taskbar
     runs-on: windows-2025-vs2026
-    timeout-minutes: 15
+    timeout-minutes: 60
 
     steps:
-      - name: Checkout GR Taskbar
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          submodules: false
-          persist-credentials: false
-
-      - name: Display project information
+      - name: Validate official repository
         shell: pwsh
         run: |
+          if ($env:GITHUB_REPOSITORY -ne "GRStudiosAI/GR-Taskbar") {
+              throw "Unauthorized repository."
+          }
+
           Write-Host "GR Taskbar"
           Write-Host "GR Studios AI LLC"
           Write-Host "Where Imagination Meets Intelligence."
-          Write-Host "Repository: $env:GITHUB_REPOSITORY"
-          Write-Host "Branch: $env:GITHUB_REF_NAME"
-          Write-Host "Commit: $env:GITHUB_SHA"
 
-      - name: Validate repository
+      - name: Checkout GR Taskbar
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Configure MSBuild
+        uses: microsoft/setup-msbuild@v3
+
+      - name: Configure NuGet
+        uses: nuget/setup-nuget@v2
+
+      - name: Validate source files
         shell: pwsh
         run: |
-          $ErrorActionPreference = "Stop"
-
-          if ($env:GITHUB_REPOSITORY -ne "GRStudiosAI/GR-Taskbar") {
-              throw "Unexpected repository."
-          }
-
           $required = @(
               "GR-Taskbar.sln",
               "build.proj",
@@ -58,37 +81,83 @@ jobs:
               if (-not (Test-Path -LiteralPath $path)) {
                   throw "Missing required component: $path"
               }
-
-              Write-Host "Validated: $path"
           }
 
-      - name: Validate component independence
+      - name: Restore project dependencies
         shell: pwsh
         run: |
-          $entries = git ls-files --stage
+          nuget restore GR-Taskbar.sln
 
           if ($LASTEXITCODE -ne 0) {
-              throw "Unable to inspect Git index."
+              throw "NuGet restore failed."
           }
 
-          $unexpected = $entries |
-              Where-Object {
-                  $_ -match '^160000\s' -and
-                  $_ -notmatch '\s+libs/(libvalinet|sws|zlib)$'
-              }
+          nuget restore gr_starttiledata/gr_starttiledata.slnx
 
-          if ($unexpected) {
-              $unexpected | Write-Host
-              throw "Unexpected external submodule detected."
+          if ($LASTEXITCODE -ne 0) {
+              throw "StartTileData restore failed."
           }
 
-          Write-Host "Component validation passed."
-
-      - name: Complete source validation
+      - name: Compile build dependencies
         shell: pwsh
         run: |
-          Write-Host "GR Taskbar source validation completed."
-          Write-Host "No binaries downloaded."
-          Write-Host "No installer generated."
-          Write-Host "No artifacts published."
-          Write-Host "No release created."
+          $script = ".\BuildDependencies$($env:BUILD_CONFIGURATION).bat"
+
+          if (-not (Test-Path $script)) {
+              throw "Missing dependency build script: $script"
+          }
+
+          & $script
+
+          if ($LASTEXITCODE -ne 0) {
+              throw "Dependency compilation failed."
+          }
+
+      - name: Compile GR Taskbar
+        shell: pwsh
+        run: |
+          msbuild build.proj /m `
+              "/p:Configuration=$env:BUILD_CONFIGURATION" `
+              /verbosity:minimal `
+              /bl:GR-Taskbar-Build.binlog
+
+          if ($LASTEXITCODE -ne 0) {
+              throw "GR Taskbar compilation failed."
+          }
+
+      - name: Inspect generated binaries
+        shell: pwsh
+        run: |
+          $output = "build/$env:BUILD_CONFIGURATION"
+
+          if (-not (Test-Path $output)) {
+              throw "Build output directory is missing."
+          }
+
+          $files = Get-ChildItem $output -Recurse -File |
+              Where-Object {
+                  $_.Extension -in ".exe", ".dll"
+              }
+
+          if (-not $files) {
+              throw "No compiled binaries found."
+          }
+
+          $files | Select-Object FullName, Length
+
+      - name: Upload GR Taskbar build
+        uses: actions/upload-artifact@v4
+        with:
+          name: GR-Taskbar-${{ env.BUILD_CONFIGURATION }}-${{ github.sha }}
+          path: build/${{ env.BUILD_CONFIGURATION }}/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: GR-Taskbar-Build-Diagnostics
+          path: GR-Taskbar-Build.binlog
+          if-no-files-found: ignore
+          retention-days: 7
