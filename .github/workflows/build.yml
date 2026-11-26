@@ -1,4 +1,3 @@
-
 name: GR Taskbar - Official Build
 
 on:
@@ -61,6 +60,7 @@ jobs:
         run: |
           Get-Command nuget.exe -ErrorAction Stop
           nuget help
+
           if ($LASTEXITCODE -ne 0) {
               throw "NuGet initialization failed."
           }
@@ -80,7 +80,9 @@ jobs:
               "gr_starttiledata",
               "GR-Taskbar-L10N",
               "gr_extra",
-              "gr_extra_win7alttab"
+              "gr_extra_win7alttab",
+              "gr_setup/MicrosoftPayload.targets",
+              "BuildDependencies$env:BUILD_CONFIGURATION.bat"
           )
 
           foreach ($path in $required) {
@@ -108,35 +110,200 @@ jobs:
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+
           if errorlevel 1 exit /b 1
           if not defined VSINSTALLDIR exit /b 1
+
           where cl.exe
           if errorlevel 1 exit /b 1
+
           where cmake.exe
           if errorlevel 1 exit /b 1
+
           if not exist "BuildDependencies%BUILD_CONFIGURATION%.bat" exit /b 1
+
           call "BuildDependencies%BUILD_CONFIGURATION%.bat"
+
           if errorlevel 1 exit /b 1
 
       - name: Compile GR Taskbar
+        id: compile
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+
           if errorlevel 1 exit /b 1
           if not defined VSINSTALLDIR exit /b 1
+
           msbuild build.proj /m /p:Configuration=%BUILD_CONFIGURATION% /verbosity:minimal /bl:GR-Taskbar-Build.binlog
+
           if errorlevel 1 exit /b 1
+
+      - name: Diagnose Microsoft ARM64 payloads
+        if: failure() && steps.compile.outcome == 'failure'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $cache = Join-Path $env:GITHUB_WORKSPACE "build\dependency-cache\ARM64"
+          $report = Join-Path $env:GITHUB_WORKSPACE "GR-Taskbar-ARM64-Diagnostics.txt"
+
+          Write-Host "GR Taskbar Microsoft ARM64 dependency diagnostics"
+          Write-Host "Dependency cache: $cache"
+
+          if (-not (Test-Path -LiteralPath $cache)) {
+              $message = "ARM64 dependency cache does not exist."
+              Write-Warning $message
+              $message | Set-Content -LiteralPath $report -Encoding UTF8
+              exit 0
+          }
+
+          $files = @(
+              Get-ChildItem -LiteralPath $cache -Recurse -File -Filter "*.dll"
+          )
+
+          if ($files.Count -eq 0) {
+              $message = "No Microsoft ARM64 DLLs found in the dependency cache."
+              Write-Warning $message
+              $message | Set-Content -LiteralPath $report -Encoding UTF8
+              exit 0
+          }
+
+          $results = foreach ($file in $files) {
+              try {
+                  $sig = Get-AuthenticodeSignature -LiteralPath $file.FullName
+
+                  $hash = Get-FileHash `
+                      -LiteralPath $file.FullName `
+                      -Algorithm SHA256
+
+                  $bytes = [System.IO.File]::ReadAllBytes($file.FullName)
+
+                  $machine = "Invalid PE"
+                  $architecture = "Unknown"
+                  $validPE = $false
+
+                  if ($bytes.Length -ge 64) {
+                      $dosHeader = [BitConverter]::ToUInt16($bytes, 0)
+                      $offset = [BitConverter]::ToInt32($bytes, 60)
+
+                      if (
+                          $dosHeader -eq 0x5A4D -and
+                          $offset -ge 64 -and
+                          $offset -le ($bytes.Length - 24)
+                      ) {
+                          $peHeader = [BitConverter]::ToUInt32(
+                              $bytes,
+                              $offset
+                          )
+
+                          if ($peHeader -eq 17744) {
+                              $validPE = $true
+
+                              $machineValue = [BitConverter]::ToUInt16(
+                                  $bytes,
+                                  $offset + 4
+                              )
+
+                              $machine = "0x{0:X4}" -f $machineValue
+
+                              switch ($machineValue) {
+                                  0xAA64 {
+                                      $architecture = "ARM64"
+                                  }
+                                  0x8664 {
+                                      $architecture = "x64"
+                                  }
+                                  0x014C {
+                                      $architecture = "x86"
+                                  }
+                                  0xA641 {
+                                      $architecture = "ARM64EC"
+                                  }
+                                  0xA64E {
+                                      $architecture = "ARM64X"
+                                  }
+                                  default {
+                                      $architecture = "Unknown"
+                                  }
+                              }
+                          }
+                      }
+                  }
+
+                  $signer = if ($sig.SignerCertificate) {
+                      $sig.SignerCertificate.Subject
+                  } else {
+                      "No signer certificate returned"
+                  }
+
+                  $thumbprint = if ($sig.SignerCertificate) {
+                      $sig.SignerCertificate.Thumbprint
+                  } else {
+                      "Unavailable"
+                  }
+
+                  $microsoftSigner = (
+                      $null -ne $sig.SignerCertificate -and
+                      $signer -match 'O=Microsoft Corporation(?:,|$)'
+                  )
+
+                  $signaturePassed = (
+                      $sig.Status -eq "Valid" -and
+                      $microsoftSigner
+                  )
+
+                  [PSCustomObject]@{
+                      File = $file.FullName
+                      Size = $file.Length
+                      SHA256 = $hash.Hash
+                      ValidPE = $validPE
+                      Machine = $machine
+                      Architecture = $architecture
+                      ExpectedArchitecture = "ARM64"
+                      ArchitecturePassed = (
+                          $validPE -and
+                          $machine -eq "0xAA64"
+                      )
+                      SignatureStatus = $sig.Status
+                      SignatureStatusMessage = $sig.StatusMessage
+                      SignatureType = $sig.SignatureType
+                      Signer = $signer
+                      CertificateThumbprint = $thumbprint
+                      MicrosoftSigner = $microsoftSigner
+                      SignaturePassed = $signaturePassed
+                      Error = ""
+                  }
+              }
+              catch {
+                  [PSCustomObject]@{
+                      File = $file.FullName
+                      Error = $_.Exception.Message
+                  }
+              }
+          }
+
+          $diagnostics = $results |
+              Format-List * |
+              Out-String -Width 4096
+
+          Write-Host $diagnostics
+
+          $diagnostics |
+              Set-Content -LiteralPath $report -Encoding UTF8
+
+          Write-Host "ARM64 dependency diagnostics completed."
 
       - name: Inspect generated binaries
         shell: pwsh
         run: |
           $output = "build/$env:BUILD_CONFIGURATION"
 
-          if (-not (Test-Path $output)) {
+          if (-not (Test-Path -LiteralPath $output)) {
               throw "Build output directory is missing."
           }
 
-          $files = Get-ChildItem $output -Recurse -File |
+          $files = Get-ChildItem -LiteralPath $output -Recurse -File |
               Where-Object {
                   $_.Extension -in ".exe", ".dll"
               }
@@ -160,6 +327,8 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: GR-Taskbar-Build-Diagnostics
-          path: GR-Taskbar-Build.binlog
+          path: |
+            GR-Taskbar-Build.binlog
+            GR-Taskbar-ARM64-Diagnostics.txt
           if-no-files-found: ignore
           retention-days: 7
