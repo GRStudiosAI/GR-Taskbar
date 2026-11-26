@@ -1,0 +1,71 @@
+name: Installation and Update Issue
+description: Report installation, servicing, update, or removal problems.
+title: "[INSTALLER]: "
+labels: ["installer"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: GR Taskbar Version
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows Version and Build
+    validations:
+      required: true
+
+  - type: dropdown
+    id: operation
+    attributes:
+      label: Installer Operation
+      options:
+        - Fresh Installation
+        - Upgrade
+        - Repair
+        - Reinstallation
+        - Uninstallation
+        - Automatic Update
+        - Rollback
+    validations:
+      required: true
+
+  - type: input
+    id: error
+    attributes:
+      label: Installer Error Code
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the Problem
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Installer Logs
+      description: Remove confidential information before submitting.
+
+  - type: dropdown
+    id: explorer
+    attributes:
+      label: Did Windows Explorer Restart Successfully?
+      options:
+        - "Yes"
+        - "No"
+        - Not Applicable
+        - Unknown
+
+  - type: dropdown
+    id: settings
+    attributes:
+      label: Were Your Existing Settings Preserved?
+      options:
+        - "Yes"
+        - "No"
+        - Not Applicable
+        - Unknown

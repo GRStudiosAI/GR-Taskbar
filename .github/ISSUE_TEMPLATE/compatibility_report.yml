@@ -1,0 +1,53 @@
+name: Windows Compatibility Report
+description: Report Windows or software compatibility problems.
+title: "[COMPATIBILITY]: "
+labels: ["compatibility"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: GR Taskbar Version
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows Version and Build
+    validations:
+      required: true
+
+  - type: dropdown
+    id: architecture
+    attributes:
+      label: System Architecture
+      options:
+        - x64
+        - ARM64
+        - x86
+    validations:
+      required: true
+
+  - type: input
+    id: software
+    attributes:
+      label: Conflicting Software or Windows Component
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Compatibility Problem
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Screenshots and Sanitized Logs

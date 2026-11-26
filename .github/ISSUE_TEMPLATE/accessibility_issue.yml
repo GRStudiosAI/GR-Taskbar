@@ -1,0 +1,57 @@
+name: Accessibility Issue
+description: Report accessibility barriers within GR Taskbar.
+title: "[ACCESSIBILITY]: "
+labels: ["accessibility"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: GR Taskbar Version
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows Version and Build
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Accessibility Category
+      options:
+        - Keyboard Navigation
+        - Screen Reader
+        - High Contrast
+        - Display Scaling
+        - Text Readability
+        - Visual Focus Indicators
+        - Mouse Cursors
+        - Installer Accessibility
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: technology
+    attributes:
+      label: Assistive Technology Used
+
+  - type: textarea
+    id: barrier
+    attributes:
+      label: Describe the Accessibility Barrier
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Accessible Behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestions
+    attributes:
+      label: Suggested Improvements

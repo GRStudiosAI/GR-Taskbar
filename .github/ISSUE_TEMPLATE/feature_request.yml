@@ -1,0 +1,54 @@
+name: Feature Request
+description: Suggest a new GR Taskbar feature or improvement.
+title: "[FEATURE]: "
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Taskbar
+        - Start Menu
+        - Start Icons
+        - Mouse Cursors
+        - GR Settings
+        - Windows Explorer
+        - Themes and Appearance
+        - Installer
+        - Accessibility
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: feature
+    attributes:
+      label: Requested Feature
+    validations:
+      required: true
+
+  - type: textarea
+    id: purpose
+    attributes:
+      label: Purpose and Benefits
+    validations:
+      required: true
+
+  - type: textarea
+    id: implementation
+    attributes:
+      label: Suggested Implementation
+
+  - type: textarea
+    id: references
+    attributes:
+      label: Examples or Reference Images
+
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmation
+      options:
+        - label: I searched for existing feature requests.
+          required: true
