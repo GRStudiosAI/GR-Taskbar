@@ -1833,7 +1833,7 @@ HRESULT BringBackSharedStartLayoutInCuratedTileCollections(HMODULE hModule)
 
     WCHAR szPath[MAX_PATH];
     RETURN_IF_FAILED(SHGetFolderPathW(nullptr, SPECIAL_FOLDER, nullptr, SHGFP_TYPE_CURRENT, szPath));
-    RETURN_IF_FAILED(StringCchCatW(szPath, ARRAYSIZE(szPath), _T(APP_RELATIVE_PATH) L"\\ep_starttiledata.dll"));
+    RETURN_IF_FAILED(StringCchCatW(szPath, ARRAYSIZE(szPath), _T(APP_RELATIVE_PATH) L"\\GR-Taskbar-StartTileData.dll"));
 
     wil::unique_hmodule hMyStartTileData(LoadLibraryW(szPath));
     RETURN_LAST_ERROR_IF_NULL(hMyStartTileData);
@@ -2097,7 +2097,7 @@ HRESULT STDMETHODCALLTYPE StartPinUnpinContextMenu_CreateInstance_IClassFactory_
 {
     WCHAR szPath[MAX_PATH];
     RETURN_IF_FAILED(SHGetFolderPathW(nullptr, SPECIAL_FOLDER, nullptr, SHGFP_TYPE_CURRENT, szPath));
-    RETURN_IF_FAILED(StringCchCatW(szPath, ARRAYSIZE(szPath), _T(APP_RELATIVE_PATH) L"\\ep_starttiledata.dll"));
+    RETURN_IF_FAILED(StringCchCatW(szPath, ARRAYSIZE(szPath), _T(APP_RELATIVE_PATH) L"\\GR-Taskbar-StartTileData.dll"));
 
     wil::unique_hmodule hMyStartTileData(LoadLibraryW(szPath));
     RETURN_LAST_ERROR_IF_NULL(hMyStartTileData);

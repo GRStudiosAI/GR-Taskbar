@@ -1,6 +1,6 @@
 //{{NO_DEPENDENCIES}}
 // Microsoft Visual C++ generated include file.
-// Used by ep_dwm.rc
+// Used by gr_dwm.rc
 
 // Next default values for new objects
 //

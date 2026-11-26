@@ -6,7 +6,7 @@
 #pragma comment(lib, "Wininet.lib")
 #include <shlobj_core.h>
 #include "utility.h"
-#include "../gr_gui/resources/EPSharedResources.h"
+#include "../gr_gui/resources/GRSharedResources.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,7 +26,12 @@ extern HMODULE hModule;
 #define UPDATES_OP_INSTALL 2
 #define UPDATES_OP_INSTALL_NO_CONFIRM 3
 
-#define UPDATES_USER_AGENT "ExplorerPatcher"
+#define UPDATES_USER_AGENT "GR Taskbar"
+// Migration safeguard: enable only after GR release downloads/signature checks
+// have passed end-to-end testing. Saved update preferences are left untouched.
+#ifndef GR_UPDATER_VERIFIED
+#define GR_UPDATER_VERIFIED 0
+#endif
 #define UPDATES_FORM_HEADERS "Content-Type: text/plain;\r\n"
 #define UPDATES_HASH_SIZE 32
 #define UPDATES_BUFSIZ 10240

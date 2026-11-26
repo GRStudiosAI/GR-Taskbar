@@ -70,9 +70,9 @@ BEGIN
             VALUE "CompanyName", "VALINET Solutions SRL"
             VALUE "FileDescription", "ExplorerPatcher Custom Libraries Chainloader"
             VALUE "FileVersion", "1.0.0.0"
-            VALUE "InternalName", "ep_extra.dll"
+            VALUE "InternalName", "GR-Taskbar-Extra.dll"
             VALUE "LegalCopyright", "Copyright (C) 2006-2026 VALINET Solutions SRL. All rights reserved."
-            VALUE "OriginalFilename", "ep_extra.dll"
+            VALUE "OriginalFilename", "GR-Taskbar-Extra.dll"
             VALUE "ProductName", "ExplorerPatcher"
             VALUE "ProductVersion", "1.0.0.0"
         END

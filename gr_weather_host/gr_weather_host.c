@@ -1,7 +1,7 @@
-#include "ep_weather_host.h"
-#include "ep_weather_provider_google_html.h"
-#include "ep_weather_provider_google_script.h"
-#include "ep_weather_error_html.h"
+#include "gr_weather_host.h"
+#include "gr_weather_provider_google_html.h"
+#include "gr_weather_provider_google_script.h"
+#include "gr_weather_error_html.h"
 
 #include <stdio.h>
 

@@ -46,9 +46,9 @@ static RECT GRStartIconLayout(RECT button, RECT content, UINT dpi, GRStartIconSi
     case 3: logical = 32; break;
     case 4: logical = (int)max(16, min(48, settings.customSize)); break;
     default:
-        // Standard 40-logical-pixel taskbars use a 32-logical-pixel icon.
+        // Standard 40-logical-pixel taskbars use a 24-logical-pixel icon.
         // Smaller/larger buttons adapt without depending on orientation.
-        logical = max(16, min(48, MulDiv(min(buttonWidth, buttonHeight), 96 * 4, (int)dpi * 5)));
+        logical = max(16, min(48, MulDiv(min(buttonWidth, buttonHeight), 96 * 3, (int)dpi * 5)));
         break;
     }
     int side = max(1, min(available, MulDiv(logical, (int)dpi, 96)));

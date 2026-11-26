@@ -8,9 +8,11 @@ Windows desktop customization maintained by **GR Studios AI LLC**.
 
 ## Current build
 
-Version **26100.9711.71.10** is a development build. Save open work before
-installing: setup restarts Windows Explorer. Use `ep_setup.exe` on Intel/AMD
-Windows; ARM64 releases use `ep_setup_arm64.exe` when available.
+Version **26100.9711.71.14** is a development build. The Start icon hover/click
+fix is confirmed on the development PC; wider compatibility testing remains.
+Save open work before installing: setup restarts Windows Explorer.
+Use `GR-Taskbar-Setup.exe` on Intel/AMD Windows. ARM64 builds require separate
+compilation and validation; this development build was compiled for x64 and x86.
 
 Open **GR Taskbar Settings** from Start or the taskbar context menu.
 Settings use a compact sidebar and dropdown choices. Drag the top header to
@@ -90,19 +92,23 @@ The installer and UI are branded **GR Taskbar**, published by **GR Studios AI LL
 The installed folder is `%PROGRAMFILES%\GR-Taskbar`; configuration uses
 `HKCU\Software\GR-Taskbar`. Current GR Taskbar icon libraries and customization
 settings remain supported. Obsolete first-brand migration code was removed.
-Update defaults point to `GRStudiosAI/GR-Taskbar`. Release asset names remain
-`ep_setup.exe` and `ep_setup_arm64.exe` for the GR Taskbar updater protocol.
+Update defaults point to `GRStudiosAI/GR-Taskbar`. Network update checks and
+installation are disabled during migration (`GR_UPDATER_VERIFIED=0`) until the
+official release download and verification path passes testing. Saved update
+preferences are preserved. The x64 installer is `GR-Taskbar-Setup.exe`.
 ## Build and publish
 
 Open `GR-Taskbar.sln` with Visual Studio 2026 and the Windows C++ workload.
 Restore NuGet packages, initialize the listed dependencies, build zlib, and
-build the x86 helper and x64 solution. The existing workflow builds x64 and
-ARM64 from `build.proj` and the `gr_` component folders.
+build the x86 helper, StartTileData component and x64 solution. The signed local
+entry point is `scripts/Build-GRTaskbar.ps1`; see [SIGNING.md](SIGNING.md).
+It signs components before packaging, verifies the payload catalog, and signs
+the final installer after metadata stamping. The approved project icon is embedded.
+Pinned x64 Microsoft payload files are hash-checked in a persistent build cache.
 
-After installed testing, commit the reviewed source with a message starting
-with `rel_`, create a version tag and push both to this repository. The tag
-workflow publishes installer assets. Keep the stable release asset filenames
-unchanged and increment `version.h` for subsequent releases.
+The current GitHub workflow validates source only; it does not build or publish
+installers. Release automation, ARM64 validation and installed testing remain
+outstanding. Do not treat a successful local compilation as a verified release.
 
 ## License
 

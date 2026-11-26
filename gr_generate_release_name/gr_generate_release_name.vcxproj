@@ -86,6 +86,7 @@
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)\build\$(Configuration)\$(Platform)\</OutDir>
   </PropertyGroup>
+  <PropertyGroup Label="GRComponentIdentity"><TargetName>GR-Taskbar-ReleaseName</TargetName></PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -147,7 +148,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="ep_generate_release_name.c" />
+    <ClCompile Include="gr_generate_release_name.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\GR-Taskbar\queryversion.h" />

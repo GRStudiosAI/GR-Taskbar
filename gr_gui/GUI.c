@@ -1040,22 +1040,9 @@ static BOOL GUI_Build(HDC hDC, HWND hwnd, POINT pt)
         );
     }
 
-    // Populate page titles before drawing the header, using the same resource stream.
+    // The main parser resolves conditional pages. Draw the page header only
+    // after that pass; an unconditional pre-scan can shift the About title.
     ZeroMemory(_this->sectionNames, sizeof(_this->sectionNames));
-    FILE* titleStream = fmemopen(pRscr, cbRscr, "r");
-    if (titleStream) {
-        char* titleLine = NULL; size_t titleCapacity = 0; size_t page = 0;
-        while (getline(&titleLine, &titleCapacity, titleStream) != -1 && page < ARRAYSIZE(_this->sectionNames)) {
-            if (!strncmp(titleLine, ";T ", 3)) {
-                WCHAR label[MAX_LINE_LENGTH] = {0};
-                MultiByteToWideChar(CP_UTF8, 0, titleLine + 3, -1, label, ARRAYSIZE(label));
-                GUI_SubstituteLocalizedString(label, ARRAYSIZE(label));
-                label[wcscspn(label, L"\r\n")] = 0;
-                wcsncpy_s(_this->sectionNames[page++], 64, label, _TRUNCATE);
-            }
-        }
-        free(titleLine); fclose(titleStream);
-    }
     UINT dpiX = 0, dpiY = 0;
     HRESULT hr = GetDpiForMonitor(MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY), MDT_DEFAULT, &dpiX, &dpiY);
     LOGFONT logFont;
@@ -1069,12 +1056,19 @@ static BOOL GUI_Build(HDC hDC, HWND hwnd, POINT pt)
     HFONT hFontCaption = CreateFontIndirect(&logFont);
     logFont = ncm.lfMenuFont;
     wcscpy_s(logFont.lfFaceName, ARRAYSIZE(logFont.lfFaceName), L"Segoe UI");
-    logFont.lfHeight = -(int)(13 * dy);
+    logFont.lfHeight = -MulDiv(14, (int)dpiY, 96);
+    logFont.lfWidth = 0;
+    logFont.lfQuality = CLEARTYPE_NATURAL_QUALITY;
+    logFont.lfCharSet = DEFAULT_CHARSET;
     //logFont.lfHeight = GUI_TITLE_FONT_SIZE * dy;
     HFONT hFontTitle = CreateFontIndirect(&logFont);
     logFont.lfWeight = FW_REGULAR;
     logFont.lfUnderline = 1;
+    wcscpy_s(logFont.lfFaceName, ARRAYSIZE(logFont.lfFaceName), L"Arial");
     HFONT hFontUnderline = CreateFontIndirect(&logFont);
+    logFont.lfUnderline = 0;
+    HFONT hFontWebsite = CreateFontIndirect(&logFont);
+    wcscpy_s(logFont.lfFaceName, ARRAYSIZE(logFont.lfFaceName), L"Segoe UI");
     logFont.lfWeight = FW_REGULAR;
     logFont.lfUnderline = 0;
     HFONT hFontRegular = CreateFontIndirect(&logFont);
@@ -1151,15 +1145,6 @@ static BOOL GUI_Build(HDC hDC, HWND hwnd, POINT pt)
             brand.top = 33 * dy; brand.bottom = 49 * dy;
             SetTextColor(hdcPaint, g_darkModeEnabled ? RGB(146, 163, 188) : RGB(77, 96, 123));
             DrawTextW(hdcPaint, L"GR STUDIOS AI LLC", -1, &brand, DT_SINGLELINE);
-            SelectObject(hdcPaint, heading);
-            RECT pageHeading = { dwLeftPad + _this->padding.left, 10 * dy, rc.right - 24 * dx, 35 * dy };
-            SetTextColor(hdcPaint, g_darkModeEnabled ? RGB(234, 241, 252) : RGB(23, 38, 58));
-            if (_this->section < ARRAYSIZE(_this->sectionNames))
-                DrawTextW(hdcPaint, _this->sectionNames[_this->section], -1, &pageHeading, DT_SINGLELINE | DT_VCENTER);
-            SelectObject(hdcPaint, subtitleFont);
-            pageHeading.top = 38 * dy; pageHeading.bottom = 55 * dy;
-            SetTextColor(hdcPaint, g_darkModeEnabled ? RGB(146, 163, 188) : RGB(77, 96, 123));
-            DrawTextW(hdcPaint, L"GR Studios AI LLC  |  grstudios.shop", -1, &pageHeading, DT_SINGLELINE);
             SelectObject(hdcPaint, old);
             DeleteObject(heading);
             DeleteObject(subtitleFont);
@@ -1296,9 +1281,9 @@ static BOOL GUI_Build(HDC hDC, HWND hwnd, POINT pt)
                     dwLineHeight -= 0.2 * dwLineHeight;
                 }
 
-                rcText.left = dwLeftPad + _this->padding.left;
+                rcText.left = dwLeftPad + 24 * dx;
                 rcText.top = !strncmp(line, ";M ", 3) ? 0 : (dwTop + dwMaxHeight);
-                rcText.right = (rc.right - rc.left) - _this->padding.right;
+                rcText.right = (rc.right - rc.left) - 36 * dx;
                 rcText.bottom = !strncmp(line, ";M ", 3) ? _this->GUI_CAPTION_LINE_HEIGHT * dy : (dwMaxHeight + dwLineHeight * dy - dwBottom);
                 if (strncmp(line, ";T ", 3) && strncmp(line, ";M ", 3) && currentSection != (SIZE_T)-1)
                 {
@@ -1412,7 +1397,20 @@ static BOOL GUI_Build(HDC hDC, HWND hwnd, POINT pt)
                 }
                 else
                 {
-                    hOldFont = SelectObject(hdcPaint, hFontRegular);
+                    hOldFont = SelectObject(hdcPaint, strstr(line, "grstudios.shop") ? hFontWebsite : hFontRegular);
+                }
+
+                if (strncmp(line, ";M ", 3) && strncmp(line, ";T ", 3))
+                {
+                    TEXTMETRICW metrics;
+                    if (GetTextMetricsW(hdcPaint, &metrics))
+                    {
+                        int inset = max(1, MulDiv(1, (int)dpiY, 96));
+                        rcText.bottom = max(rcText.bottom, rcText.top + metrics.tmHeight + 2 * inset);
+                        // Keep descenders and link underlines inside their row.
+                        dwLineHeight = max(dwLineHeight,
+                            (DWORD)MulDiv(metrics.tmHeight + 2 * inset + dwTop, 96, (int)dpiY));
+                    }
                 }
 
                 if (!strncmp(line, ";e ", 3) || !strncmp(line, ";a ", 3) || !strncmp(line, ";T ", 3) || !strncmp(line, ";t ", 3) || !strncmp(line, ";u ", 3) || !strncmp(line, ";M ", 3))
@@ -1592,7 +1590,7 @@ static BOOL GUI_Build(HDC hDC, HWND hwnd, POINT pt)
                     }
                     if (!strncmp(line, ";M ", 3))
                     {
-                        if (hDC)
+                        if (hDC && IsHighContrast())
                         {
                             UINT diff = (int)(((_this->GUI_CAPTION_LINE_HEIGHT - 16) * dx) / 2.0);
                             //printf("!!! %d %d\n", (int)(16.0 * dx), diff);
@@ -1648,7 +1646,7 @@ static BOOL GUI_Build(HDC hDC, HWND hwnd, POINT pt)
                         dwLineHeight = _this->GUI_CAPTION_LINE_HEIGHT;
                         _this->extent.cyTopHeight = rcText.bottom;
                     }
-                    if (hDC)
+                    if (hDC && (strncmp(line, ";M ", 3) || IsHighContrast()))
                     {
                         COLORREF cr;
                         if (!strncmp(line, ";u ", 3) && tabOrder == _this->tabOrder)
@@ -2106,7 +2104,7 @@ static BOOL GUI_Build(HDC hDC, HWND hwnd, POINT pt)
                                 ChooseCustomOrb(hwnd);
                             }
                             else if (!strcmp(line + 1, "theme_apply")) ThemeApplySelectedPreset(hwnd);
-                            else if (!strcmp(line + 1, "legal_notices")) MessageBoxW(hwnd, L"GR Taskbar is a modified GPL-2.0 distribution by GR Studios AI LLC (2026).\n\nBased on ExplorerPatcher. Copyright (C) 2006-2026 VALINET Solutions SRL and other contributors. Existing copyright notices remain applicable.\n\nThis software comes without warranty. The GNU GPL version 2 and the corresponding source are supplied with the project.\n\nGR Studios AI LLC: https://grstudios.shop", L"GR Taskbar - License", MB_OK | MB_ICONINFORMATION);
+                            else if (!strcmp(line + 1, "legal_notices")) MessageBoxW(hwnd, L"GR Taskbar\nOriginal modifications copyright (C) 2026 GR Studios AI LLC.\n\nLicensed under the GNU General Public License, version 2.\nThis software is provided without warranty.\n\nThe complete license and required copyright notices are included in LICENSE.txt and the corresponding project source.\n\nBusiness website: https://grstudios.shop", L"GR Taskbar - License", MB_OK | MB_ICONINFORMATION);
                             else if (!strcmp(line + 1, "theme_luna")) ThemePreset(hwnd, 0);
                             else if (!strcmp(line + 1, "theme_royale")) ThemePreset(hwnd, 1);
                             else if (!strcmp(line + 1, "theme_classic")) ThemePreset(hwnd, 2);
@@ -3329,6 +3327,31 @@ static BOOL GUI_Build(HDC hDC, HWND hwnd, POINT pt)
         free(text);
         free(line);
         free(lastHeading);
+        if (hDC && !IsHighContrast())
+        {
+            SelectClipRgn(hdcPaint, NULL);
+            LOGFONT headerFont = logFont;
+            headerFont.lfHeight = -MulDiv(18, (int)dpiY, 96);
+            headerFont.lfWeight = FW_SEMIBOLD;
+            headerFont.lfUnderline = FALSE;
+            HFONT titleFont = CreateFontIndirectW(&headerFont);
+            HGDIOBJ previousFont = SelectObject(hdcPaint, titleFont);
+            SetBkMode(hdcPaint, TRANSPARENT);
+            SetTextColor(hdcPaint, g_darkModeEnabled ? RGB(234, 241, 252) : RGB(23, 38, 58));
+            RECT heading = { dwLeftPad + 24 * dx, 10 * dy, rc.right - 36 * dx, 35 * dy };
+            if (_this->section < ARRAYSIZE(_this->sectionNames))
+                DrawTextW(hdcPaint, _this->sectionNames[_this->section], -1, &heading, DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+            headerFont.lfHeight = -MulDiv(12, (int)dpiY, 96);
+            headerFont.lfWeight = FW_NORMAL;
+            wcscpy_s(headerFont.lfFaceName, ARRAYSIZE(headerFont.lfFaceName), L"Arial");
+            HFONT subtitle = CreateFontIndirectW(&headerFont);
+            SelectObject(hdcPaint, subtitle);
+            heading.top = 38 * dy; heading.bottom = 55 * dy;
+            SetTextColor(hdcPaint, g_darkModeEnabled ? RGB(166, 184, 209) : RGB(77, 96, 123));
+            DrawTextW(hdcPaint, L"GR Studios AI LLC  |  grstudios.shop", -1, &heading, DT_SINGLELINE | DT_END_ELLIPSIS);
+            SelectObject(hdcPaint, previousFont);
+            DeleteObject(subtitle); DeleteObject(titleFont);
+        }
         if (!bWasSpecifiedSectionValid)
         {
             _this->bRebuildIfTabOrderIsEmpty = FALSE;
@@ -3344,6 +3367,7 @@ static BOOL GUI_Build(HDC hDC, HWND hwnd, POINT pt)
         DeleteObject(hFontSectionSel);
         DeleteObject(hFontSection);
         DeleteObject(hFontRegular);
+        DeleteObject(hFontWebsite);
         DeleteObject(hFontTitle);
         DeleteObject(hFontUnderline);
         DeleteObject(hFontCaption);

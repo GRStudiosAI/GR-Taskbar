@@ -1,5 +1,5 @@
-#include "ep_weather_factory.h"
-#include "ep_weather_host.h"
+#include "gr_weather_factory.h"
+#include "gr_weather_host.h"
 
 ULONG STDMETHODCALLTYPE epw_factory_AddRef(IClassFactory* _this)
 {

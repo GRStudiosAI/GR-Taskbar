@@ -27,7 +27,18 @@ static void expect(PCWSTR p,const char* content){char bytes[100]={0};DWORD n;HAN
 static void reset(void){GRFreeChanges();grFailureCode=0;grFailureOperation[0]=0;grFailurePath[0]=0;assert(GRBeginFiles());}
 static void rollback(void){assert(GRRollbackFiles());GRCloseJournal(TRUE);GRFreeChanges();}
 static DWORD WINAPI releaseLock(void* h){Sleep(400);CloseHandle((HANDLE)h);return 0;}
-int wmain(void){
+int wmain(int argc, WCHAR** argv){
+ if(argc>1 && !wcscmp(argv[1],L"_creation_probe")){Sleep(250);return 0;}
+ FILETIME boundary;GetSystemTimePreciseAsFileTime(&boundary);BOOL fresh=TRUE;
+ assert(GRProcessCreatedSince(GetCurrentProcessId(),&boundary,&fresh));assert(!fresh);
+ WCHAR executable[MAX_PATH],command[MAX_PATH*2];assert(GetModuleFileNameW(NULL,executable,MAX_PATH));
+ swprintf_s(command,ARRAYSIZE(command),L"\"%s\" _creation_probe",executable);
+ STARTUPINFOW startup={sizeof(startup)};PROCESS_INFORMATION child={0};
+ assert(CreateProcessW(NULL,command,NULL,NULL,FALSE,CREATE_NO_WINDOW,NULL,NULL,&startup,&child));
+ assert(GRProcessCreatedSince(child.dwProcessId,&boundary,&fresh));assert(fresh);
+ assert(WaitForSingleObject(child.hProcess,5000)==WAIT_OBJECT_0);CloseHandle(child.hThread);CloseHandle(child.hProcess);
+ assert(!GRProcessCreatedSince(0,&boundary,&fresh));assert(!fresh);
+ puts("PASS pre-publication process rejected; post-publication child accepted; invalid PID rejected");
  assert(GetFullPathNameW(L"servicing-tests",MAX_PATH,root,NULL));CreateDirectoryW(root,NULL);wcscpy_s(grInstallRoot,MAX_PATH,root);
  swprintf_s(a,MAX_PATH,L"%s\\payload.dll",root);swprintf_s(b,MAX_PATH,L"%s\\second.dll",root);swprintf_s(stage,MAX_PATH,L"%s\\staged.tmp",root);
  WCHAR log[MAX_PATH];swprintf_s(log,MAX_PATH,L"%s\\test.log",root);grLog=CreateFileW(log,GENERIC_WRITE,FILE_SHARE_READ,NULL,CREATE_ALWAYS,0,NULL);

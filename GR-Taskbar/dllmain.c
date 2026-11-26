@@ -10,6 +10,7 @@
 #include <windowsx.h>
 #include <Uxtheme.h>
 #include "CustomOrb.h"
+#include "StartIconDiagnostics.h"
 #include "AppearanceTheme.h"
 #pragma comment(lib, "UxTheme.lib")
 #include <Shlobj_core.h>
@@ -35,9 +36,9 @@
 #endif
 #include <valinet/hooking/iatpatch.h>
 #include <valinet/utility/memmem.h>
-#include "../gr_weather_host/ep_weather.h"
+#include "../gr_weather_host/gr_weather.h"
 #if WITH_MAIN_PATCHER
-#include "../gr_weather_host/ep_weather_host_h.h"
+#include "../gr_weather_host/gr_weather_host_h.h"
 IEPWeather* epw = NULL;
 CRITICAL_SECTION lock_epw;
 int prev_total_h = 0;
@@ -211,7 +212,7 @@ BOOL g_bIsDesktopRaised = FALSE;
 #include "utility.h"
 #include "Localization.h"
 #include "resource.h"
-#include "../gr_gui/resources/EPSharedResources.h"
+#include "../gr_gui/resources/GRSharedResources.h"
 #ifdef USE_PRIVATE_INTERFACES
 #include "ep_private.h"
 #endif
@@ -6214,14 +6215,9 @@ void WINAPI LoadSettings(LPARAM lParam)
             else if (dwIMEStyle == 7) dwIMEStyle = 0;
         }
         dwSize = sizeof(DWORD);
-        RegQueryValueExW(
-            hKey,
-            TEXT("UpdatePolicy"),
-            0,
-            NULL,
-            &dwUpdatePolicy,
-            &dwSize
-        );
+        // Product policy is fixed; imported or hand-edited preferences cannot
+        // change update routing or switch to unattended installation.
+        dwUpdatePolicy = UPDATE_POLICY_DEFAULT;
         dwSize = sizeof(DWORD);
         RegQueryValueExW(
             hKey,
@@ -6259,10 +6255,14 @@ void WINAPI LoadSettings(LPARAM lParam)
             &dwTemp,
             &dwSize
         );
+        DWORD traceEnabled = 0, traceBytes = sizeof(traceEnabled);
+        RegGetValueW(hKey, NULL, L"StartIconDiagnostics", RRF_RT_REG_DWORD, NULL, &traceEnabled, &traceBytes);
+        GRStartIconTraceControl(traceEnabled != 0);
+        GRStartIconTrace(L"settings build=" _T(VER_WITH_DOTS) L" requestedStyle=%lu classicTaskbar=%lu", dwTemp, (DWORD)bOldTaskbar);
         if (bOldTaskbar)
         {
             CustomOrbImage image = { 0 };
-            WCHAR path[MAX_PATH];
+            WCHAR path[MAX_PATH] = L"";
             DWORD bytes = sizeof(path);
             if (dwTemp == ORB_STYLE_CUSTOM &&
                 RegGetValueW(hKey, NULL, CUSTOM_ORB_IMAGE_VALUE,
@@ -6274,6 +6274,10 @@ void WINAPI LoadSettings(LPARAM lParam)
             {
                 CreateBuiltinOrbImage(dwTemp, &image);
             }
+            GRStartIconTrace(L"decode style=%lu path=\"%s\" loaded=%d source=%ux%u sourceFrames=%u decoded=%ux%u cachedFrames=3 frame=%ux%u bounds=(%ld,%ld,%ld,%ld)",
+                dwTemp, path, image.bitmap != NULL, image.sourceWidth, image.sourceHeight, image.sourceFrames,
+                image.width, image.frameHeight * 3, image.width, image.frameHeight,
+                image.contentBounds.left, image.contentBounds.top, image.contentBounds.right, image.contentBounds.bottom);
             AcquireSRWLockExclusive(&customOrbLock);
             GRClearStartIconCache(&customOrbRenderCache);
             customOrbSizing = GRReadStartIconSizing();
@@ -7450,7 +7454,7 @@ static HWND GRResolveStartButton(HWND hwnd, HDC dc)
     }
     return NULL;
 }
-static BOOL DrawCustomOrb(HDC hdc, LPCRECT rect, LPCRECT clip, int state, const OrbInfo* orb)
+static BOOL DrawCustomOrb(HDC hdc, LPCRECT rect, LPCRECT clip, int part, int state, const OrbInfo* orb)
 {
     if (!rect) return FALSE;
     UINT dpi = orb->dpi ? orb->dpi : 96;
@@ -7466,13 +7470,30 @@ static BOOL DrawCustomOrb(HDC hdc, LPCRECT rect, LPCRECT clip, int state, const 
         {
             IntersectClipRect(hdc, button.left, button.top, button.right, button.bottom);
             if (clip) IntersectClipRect(hdc, clip->left, clip->top, clip->right, clip->bottom);
-            drawn = GRDrawOrbFrame(hdc, &customOrb, &customOrbRenderCache, target, GRStartIconFrame(state));
+            int frame = GRStartIconFrame(state);
+            BOOL hit = customOrbRenderCache.bitmap && customOrbRenderCache.width == target.right - target.left &&
+                customOrbRenderCache.height == target.bottom - target.top;
+            drawn = GRDrawOrbFrame(hdc, &customOrb, &customOrbRenderCache, target, frame);
+            if (grOrbTraceEnabled) {
+                BITMAP dcBitmap = { 0 }; RECT actualClip = { 0 }; POINT origin = { 0 };
+                GetObjectW(GetCurrentObject(hdc, OBJ_BITMAP), sizeof(dcBitmap), &dcBitmap);
+                GetClipBox(hdc, &actualClip); GetViewportOrgEx(hdc, &origin);
+                GRStartIconTrace(L"paint hwnd=%p theme=%p part=%d requestedState=%d selectedFrame=%d dpi=%u decodedSource=(%ld,%ld,%ld,%ld) cacheSource=(0,%d,%d,%d) destination=(%ld,%ld,%ld,%ld) clip=(%ld,%ld,%ld,%ld) dcBitmap=%ldx%ld viewport=%ld,%ld cacheHit=%d drawn=%d",
+                    start, orb->hTheme, part, state, frame, dpi,
+                    customOrb.contentBounds.left, customOrb.contentBounds.top + (LONG)(frame * customOrb.frameHeight),
+                    customOrb.contentBounds.right, customOrb.contentBounds.bottom + (LONG)(frame * customOrb.frameHeight),
+                    frame * customOrbRenderCache.height, customOrbRenderCache.width, (frame + 1) * customOrbRenderCache.height,
+                    target.left, target.top, target.right, target.bottom,
+                    actualClip.left, actualClip.top, actualClip.right, actualClip.bottom,
+                    dcBitmap.bmWidth, dcBitmap.bmHeight, origin.x, origin.y, hit, drawn);
+            }
             RestoreDC(hdc, saved);
         }
     }
     ReleaseSRWLockExclusive(&customOrbLock);
     return drawn;
 }
+#include "StartIconButton.h"
 HDPA hOrbCollection = NULL;
 HRESULT explorer_DrawThemeBackground(
     HTHEME  hTheme,
@@ -7498,7 +7519,7 @@ HRESULT explorer_DrawThemeBackground(
                 if (dwOrbStyle == ORB_STYLE_CUSTOM || dwOrbStyle == ORB_STYLE_WINDOWS10 ||
                     dwOrbStyle == ORB_STYLE_WINDOWS11 || dwOrbStyle == ORB_STYLE_WINDOWS7 || dwOrbStyle == ORB_STYLE_WINDOWSXP)
                 {
-                    if (DrawCustomOrb(hdc, pRect, pClipRect, iStateId, oi))
+                    if (DrawCustomOrb(hdc, pRect, pClipRect, iPartId, iStateId, oi))
                         return S_OK;
                     break;
                 }
@@ -7642,6 +7663,7 @@ HTHEME explorer_OpenThemeDataForDpi(
         }
 
         HTHEME hTheme = OpenThemeDataForDpi(hwnd, pszClassList, dpi);
+        if (!taskbarBackground) GRInstallStartArtworkPainter(hwnd);
         if (hTheme && hOrbCollection)
         {
             OrbInfo* oi = malloc(sizeof(OrbInfo));
@@ -12183,7 +12205,7 @@ DWORD Inject(BOOL bIsExplorer)
     WCHAR wszExtraLibPath[MAX_PATH];
     if (GetWindowsDirectoryW(wszExtraLibPath, MAX_PATH))
     {
-        wcscat_s(wszExtraLibPath, MAX_PATH, L"\\ep_extra.dll");
+        wcscat_s(wszExtraLibPath, MAX_PATH, L"\\GR-Taskbar-Extra.dll");
         if (FileExistsW(wszExtraLibPath))
         {
             HMODULE hExtra = LoadLibraryW(wszExtraLibPath);
@@ -12985,7 +13007,7 @@ HRESULT StartUI_CoCreateInstanceHook(REFCLSID rclsid, LPUNKNOWN pUnkOuter, DWORD
         {
             WCHAR szPath[MAX_PATH];
             SHGetFolderPathW(NULL, SPECIAL_FOLDER, NULL, SHGFP_TYPE_CURRENT, szPath);
-            wcscat_s(szPath, MAX_PATH, _T(APP_RELATIVE_PATH) L"\\ep_starttiledata.dll");
+            wcscat_s(szPath, MAX_PATH, _T(APP_RELATIVE_PATH) L"\\GR-Taskbar-StartTileData.dll");
 
             HMODULE hMyStartTileData = LoadLibraryW(szPath);
             if (hMyStartTileData)
@@ -14256,7 +14278,7 @@ BOOL WINAPI DllMain(
 #if WITH_MAIN_PATCHER
 __declspec(dllexport) int ZZGUI(HWND hWnd, HINSTANCE hInstance, LPSTR lpszCmdLine, int nCmdShow)
 {
-    // Forward to ep_gui.dll
+    // Forward to GR-Settings.dll
     LaunchPropertiesGUI(hModule);
     return 0;
 }

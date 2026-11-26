@@ -25,12 +25,32 @@ static UINT g_uFailureLine;
 static BOOL GRRestartShell(HANDLE token)
 {
     if (!grStoppedShell) return TRUE;
+    // Windows can auto-restart Explorer during publication. An already
+    // responding tray may still have the pre-update DLL mapped. Only accept a
+    // process created after this post-publication boundary.
+    FILETIME published;
+    GetSystemTimePreciseAsFileTime(&published);
+    UINT staleRestarts = 0;
     if (!FindWindowW(L"Shell_TrayWnd", NULL)) StartExplorerWithDelay(250, token);
     for (UINT attempt = 0; attempt < 40; ++attempt) {
         HWND tray = FindWindowW(L"Shell_TrayWnd", NULL); DWORD_PTR result;
-        if (tray && SendMessageTimeoutW(tray, WM_NULL, 0, 0, SMTO_ABORTIFHUNG, 250, &result)) {
-            GRLog(L"Explorer taskbar restarted and responding", L"explorer.exe", 0);
-            grStoppedShell = FALSE; return TRUE;
+        if (tray) {
+            DWORD pid = 0; BOOL fresh = FALSE;
+            GetWindowThreadProcessId(tray, &pid);
+            if (!GRProcessCreatedSince(pid, &published, &fresh))
+                return GRFail(L"verify shell process creation time", L"explorer.exe", GetLastError());
+            if (!fresh) {
+                if (staleRestarts++ >= 2)
+                    return GRFail(L"stale shell persisted after publication", L"explorer.exe", ERROR_RETRY);
+                GRLog(L"shell auto-restarted before publication finished; reload current binaries", L"explorer.exe", 0);
+                if (!GRStopExplorer(tray)) return FALSE;
+                if (!FindWindowW(L"Shell_TrayWnd", NULL)) StartExplorerWithDelay(250, token);
+                continue;
+            }
+            if (SendMessageTimeoutW(tray, WM_NULL, 0, 0, SMTO_ABORTIFHUNG, 250, &result)) {
+                GRLog(L"Explorer created after publication and taskbar responding", L"explorer.exe", 0);
+                grStoppedShell = FALSE; return TRUE;
+            }
         }
         Sleep(250);
     }
@@ -53,7 +73,7 @@ BOOL SetupShortcut(BOOL install, WCHAR* application, WCHAR* arguments)
         result = CoCreateInstance(&CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, &IID_IShellLinkW, (void**)&link);
         if (SUCCEEDED(result)) result = link->lpVtbl->SetPath(link, application);
         if (SUCCEEDED(result)) result = link->lpVtbl->SetArguments(link, arguments);
-        swprintf_s(icon, MAX_PATH, L"%s\\ep_gui.dll", grInstallRoot);
+        swprintf_s(icon, MAX_PATH, L"%s\\GR-Settings.dll", grInstallRoot);
         if (SUCCEEDED(result)) result = link->lpVtbl->SetIconLocation(link, icon, 0);
         if (SUCCEEDED(result)) result = link->lpVtbl->SetDescription(link, L"GR Taskbar settings");
         if (SUCCEEDED(result)) result = link->lpVtbl->QueryInterface(link, &IID_IPersistFile, (void**)&persist);
@@ -1125,15 +1145,15 @@ int WINAPI wWinMain(
 #elif defined(_M_ARM64)
         if (CHECK_OK(bOk)) bOk = InstallResource(bInstall, hInstance, zipFile, PRODUCT_NAME ".arm64.dll", wszPath, _T(PRODUCT_NAME) L".arm64.dll");
 #endif
-        if (CHECK_OK(bOk)) bOk = InstallResource(bInstall, hInstance, zipFile, "ep_gui.dll", wszPath, L"ep_gui.dll");
+        if (CHECK_OK(bOk)) bOk = InstallResource(bInstall, hInstance, zipFile, "GR-Settings.dll", wszPath, L"GR-Settings.dll");
         if (CHECK_OK(bOk)) bOk = InstallResource(bInstall, hInstance, zipFile, "LICENSE", wszPath, L"LICENSE.txt");
         if (CHECK_OK(bOk)) bOk = InstallResource(bInstall, hInstance, zipFile, "GR-Taskbar.cat", wszPath, L"GR-Taskbar.cat");
-        if (CHECK_OK(bOk)) bOk = DeleteResource(wszPath, L"ep_dwm.exe"); // We renamed it to ep_dwm_svc.exe due to Microsoft imposing 24H2 upgrade blocks
-        if (CHECK_OK(bOk)) bOk = InstallResource(bInstall, hInstance, zipFile, "ep_dwm_svc.exe", wszPath, L"ep_dwm_svc.exe");
+        if (CHECK_OK(bOk)) bOk = DeleteResource(wszPath, L"ep_dwm.exe"); // We renamed it to GR-Taskbar-DwmService.exe due to Microsoft imposing 24H2 upgrade blocks
+        if (CHECK_OK(bOk)) bOk = InstallResource(bInstall, hInstance, zipFile, "GR-Taskbar-DwmService.exe", wszPath, L"GR-Taskbar-DwmService.exe");
         if (bInstall)
         {
-            if (CHECK_OK(bOk)) bOk = InstallResource(bInstall, hInstance, zipFile, "ep_weather_host.dll", wszPath, L"ep_weather_host.dll");
-            if (CHECK_OK(bOk)) bOk = InstallResource(bInstall, hInstance, zipFile, "ep_weather_host_stub.dll", wszPath, L"ep_weather_host_stub.dll");
+            if (CHECK_OK(bOk)) bOk = InstallResource(bInstall, hInstance, zipFile, "GR-Taskbar-WeatherHost.dll", wszPath, L"GR-Taskbar-WeatherHost.dll");
+            if (CHECK_OK(bOk)) bOk = InstallResource(bInstall, hInstance, zipFile, "GR-Taskbar-WeatherProxy.dll", wszPath, L"GR-Taskbar-WeatherProxy.dll");
             if (CHECK_OK(bOk)) bOk = InstallResource(bInstall, hInstance, zipFile, "WebView2Loader.dll", wszPath, L"WebView2Loader.dll");
         }
         ProcessTaskbarDlls(&bOk, bInstall, FALSE, hInstance, zipFile, wszPath);
@@ -1210,7 +1230,7 @@ int WINAPI wWinMain(
             }
         }
 
-        if (CHECK_OK(bOk)) bOk = InstallResource(bInstall && IsWindows11(), hInstance, zipFile, "ep_starttiledata.dll", wszPath, L"ep_starttiledata.dll");
+        if (CHECK_OK(bOk)) bOk = InstallResource(bInstall && IsWindows11(), hInstance, zipFile, "GR-Taskbar-StartTileData.dll", wszPath, L"GR-Taskbar-StartTileData.dll");
 
         // --------------------------------------------------------------------------------
 
@@ -1245,7 +1265,7 @@ int WINAPI wWinMain(
 #elif defined(_M_ARM64)
             if (CHECK_OK(bOk)) bOk = InstallResource(bInstall, hInstance, zipFile, PRODUCT_NAME ".arm64.dll", wszPath, L"dxgi.dll");
 #endif
-            if (CHECK_OK(bOk)) bOk = InstallResource(bInstall && IsWindows11(), hInstance, zipFile, "ep_startmenu.dll", wszPath, L"wincorlib.dll");
+            if (CHECK_OK(bOk)) bOk = InstallResource(bInstall && IsWindows11(), hInstance, zipFile, "GR-Taskbar-StartMenu.dll", wszPath, L"wincorlib.dll");
             if (CHECK_OK(bOk)) bOk = DeleteResource(wszPath, L"wincorlib_orig.dll");
             if (CHECK_OK(bOk) && IsWindows11() && bInstall)
             {
@@ -1323,7 +1343,7 @@ int WINAPI wWinMain(
             dwLen = (DWORD)wcslen(wszPath);
             pArgs = wszPath + dwLen - 2;
             SHGetFolderPathW(NULL, SPECIAL_FOLDER, NULL, SHGFP_TYPE_CURRENT, wszPath + dwLen);
-            wcscat_s(wszPath, MAX_PATH, _T(APP_RELATIVE_PATH) L"\\ep_gui.dll\",ZZGUI");
+            wcscat_s(wszPath, MAX_PATH, _T(APP_RELATIVE_PATH) L"\\GR-Settings.dll\",ZZGUI");
             pArgs[0] = 0;
             bOk = SetupShortcut(bInstall, wszPath, pArgs + 1);
             ZeroMemory(wszPath, MAX_PATH);
@@ -1359,7 +1379,7 @@ int WINAPI wWinMain(
                 wszArgs[6] = L'"';
             }
             SHGetFolderPathW(NULL, SPECIAL_FOLDER, NULL, SHGFP_TYPE_CURRENT, wszArgs + 4 + (bInstall ? 0 : 3));
-            wcscat_s(wszArgs, MAX_PATH, _T(APP_RELATIVE_PATH) L"\\ep_weather_host.dll\"");
+            wcscat_s(wszArgs, MAX_PATH, _T(APP_RELATIVE_PATH) L"\\GR-Taskbar-WeatherHost.dll\"");
             wprintf(L"%s\n", wszArgs);
             WCHAR wszApp[MAX_PATH * 2];
             GetSystemDirectoryW(wszApp, MAX_PATH * 2);
@@ -1400,7 +1420,7 @@ int WINAPI wWinMain(
                 wszArgs[6] = L'"';
             }
             SHGetFolderPathW(NULL, SPECIAL_FOLDER, NULL, SHGFP_TYPE_CURRENT, wszArgs + 4 + (bInstall ? 0 : 3));
-            wcscat_s(wszArgs, MAX_PATH, _T(APP_RELATIVE_PATH) L"\\ep_weather_host_stub.dll\"");
+            wcscat_s(wszArgs, MAX_PATH, _T(APP_RELATIVE_PATH) L"\\GR-Taskbar-WeatherProxy.dll\"");
             wprintf(L"%s\n", wszArgs);
             WCHAR wszApp[MAX_PATH * 2];
             GetSystemDirectoryW(wszApp, MAX_PATH * 2);
@@ -1444,8 +1464,8 @@ int WINAPI wWinMain(
         {
             SHGetFolderPathW(NULL, SPECIAL_FOLDER, NULL, SHGFP_TYPE_CURRENT, wszPath);
             wcscat_s(wszPath, MAX_PATH, _T(APP_RELATIVE_PATH));
-            if (CHECK_OK(bOk)) bOk = DeleteResource(wszPath, L"ep_weather_host.dll");
-            if (CHECK_OK(bOk)) bOk = DeleteResource(wszPath, L"ep_weather_host_stub.dll");
+            if (CHECK_OK(bOk)) bOk = DeleteResource(wszPath, L"GR-Taskbar-WeatherHost.dll");
+            if (CHECK_OK(bOk)) bOk = DeleteResource(wszPath, L"GR-Taskbar-WeatherProxy.dll");
             if (CHECK_OK(bOk)) bOk = DeleteResource(wszPath, L"WebView2Loader.dll");
         }
 

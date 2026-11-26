@@ -71,9 +71,9 @@ BEGIN
             VALUE "CompanyName", "GR Studios AI LLC"
             VALUE "FileDescription", "GR Settings"
             VER_FILE_STRING
-            VALUE "InternalName", "ep_gui.dll"
+            VALUE "InternalName", "GR-Settings.dll"
             VALUE "LegalCopyright", "Copyright (C) 2006-2026 VALINET Solutions SRL. All rights reserved."
-            VALUE "OriginalFilename", "ep_gui.dll"
+            VALUE "OriginalFilename", "GR-Settings.dll"
             VALUE "ProductName", "GR Taskbar"
             VER_PRODUCT_STRING
         END

@@ -15,12 +15,12 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="ep_dwm.c">
+    <ClCompile Include="gr_dwm.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="ep_dwm.h">
+    <ClInclude Include="gr_dwm.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="resource.h">
@@ -28,7 +28,7 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="ep_dwm.rc">
+    <ResourceCompile Include="gr_dwm.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
   </ItemGroup>

@@ -82,6 +82,7 @@ if (-not $SkipCompile) {
     }
     Invoke-GRBuild -Label compile -Commands @(
         ('"{0}" GR-Taskbar.sln /m /p:Configuration={1} /p:Platform=IA-32 /v:minimal' -f $msbuild,$Configuration),
+        ('"{0}" gr_starttiledata\gr_starttiledata.vcxproj /m /p:Configuration={1} /p:Platform={2} "/p:SolutionDir={3}/" /v:minimal' -f $msbuild,$Configuration,$arch,$root.Replace('\','/')),
         ('"{0}" GR-Taskbar.sln /m /p:Configuration={1} /p:Platform={2} /v:minimal' -f $msbuild,$Configuration,$Platform)
     )
 }
@@ -95,10 +96,17 @@ function Sign-GRFile([string]$Path) {
     $script:checks += Test-GRSignature -Path $Path -Thumbprint $CertificateThumbprint -Mode $SigningMode
 }
 
-$names = @('GR-Taskbar.amd64.dll','GR-Taskbar.arm64.dll','ep_gui.dll','ep_dwm_svc.exe',
-    'ep_startmenu.dll','ep_starttiledata.dll','ep_weather_host.dll','ep_weather_host_stub.dll',
-    'ep_extra.dll','ep_extra_valinet.win7alttab.dll','ep_setup_patch.exe',
-    'ep_generate_release_name.exe','ep_generate_release_description.exe')
+$names = @('GR-Taskbar.amd64.dll','GR-Taskbar.arm64.dll','GR-Settings.dll','GR-Taskbar-DwmService.exe',
+    'GR-Taskbar-StartMenu.dll','GR-Taskbar-StartTileData.dll','GR-Taskbar-WeatherHost.dll','GR-Taskbar-WeatherProxy.dll',
+    'GR-Taskbar-Extra.dll','GR-Taskbar-Win7AltTab.dll','GR-Taskbar-SetupPatch.exe',
+    'GR-Taskbar-ReleaseName.exe','GR-Taskbar-ReleaseNotes.exe')
+$required = @('GR-Settings.dll','GR-Taskbar-DwmService.exe','GR-Taskbar-StartMenu.dll',
+    'GR-Taskbar-StartTileData.dll','GR-Taskbar-WeatherHost.dll','GR-Taskbar-WeatherProxy.dll')
+$required += $(if ($Platform -eq 'amd64') { 'GR-Taskbar.amd64.dll' } else { 'GR-Taskbar.arm64.dll' })
+foreach ($name in $required) {
+    if (-not (Test-Path -LiteralPath (Join-Path $output $name))) { throw "Required component missing: $name" }
+    if (-not (Test-Path -LiteralPath (Join-Path $payload $name))) { throw "Required component missing from installer payload: $name" }
+}
 foreach ($name in $names) {
     $file = Join-Path $output $name
     if (Test-Path -LiteralPath $file) {
@@ -114,7 +122,7 @@ Copy-Item -LiteralPath $x86 -Destination (Join-Path $payload 'GR-Taskbar.IA-32.d
 
 # Prove that verification rejects altered file contents without changing trust stores.
 $probe = Join-Path $WorkRoot 'logs\GR-signature-tamper-test.dll'
-Copy-Item -LiteralPath (Join-Path $output 'ep_gui.dll') -Destination $probe -Force
+Copy-Item -LiteralPath (Join-Path $output 'GR-Settings.dll') -Destination $probe -Force
 $bytes = [IO.File]::ReadAllBytes($probe); $bytes[64] = $bytes[64] -bxor 1; [IO.File]::WriteAllBytes($probe,$bytes)
 if ([GRBuildVerification]::TrustStatus($probe) -ne [Convert]::ToUInt32('80096010',16)) { throw 'Signature tamper regression check failed.' }
 Remove-Item -LiteralPath $probe -Force
@@ -130,12 +138,12 @@ if ((Test-FileCatalog -Path $payload -CatalogFilePath $catalog).ToString() -ne '
 # Only repackage setup: rebuilding component projects here would invalidate signatures.
 $solutionDirectory = $root.Replace('\','/') + '/'
 Invoke-GRBuild -Label package -Commands @(
-    ('"{0}" gr_setup\ep_setup.vcxproj /p:Configuration={1} /p:Platform={2} /p:BuildProjectReferences=false /p:GRIncludeCatalog=true "/p:SolutionDir={3}" /v:minimal' -f $msbuild,$Configuration,$arch,$solutionDirectory)
+    ('"{0}" gr_setup\gr_setup.vcxproj /p:Configuration={1} /p:Platform={2} /p:BuildProjectReferences=false /p:GRIncludeCatalog=true "/p:SolutionDir={3}" /v:minimal' -f $msbuild,$Configuration,$arch,$solutionDirectory)
 )
 if ((Test-FileCatalog -Path $payload -CatalogFilePath $catalog -FilesToSkip 'GR-Taskbar.cat').ToString() -ne 'Valid') { throw 'Packaged payload differs from its signed catalog.' }
-$installer = Join-Path $output 'ep_setup.exe'
+$installer = Join-Path $output 'GR-Taskbar-Setup.exe'
 $main = Join-Path $output $(if ($Platform -eq 'amd64') { 'GR-Taskbar.amd64.dll' } else { 'GR-Taskbar.arm64.dll' })
-& (Join-Path $output 'ep_setup_patch.exe') $main $installer
+& (Join-Path $output 'GR-Taskbar-SetupPatch.exe') $main $installer
 if ($LASTEXITCODE -ne 0) { throw 'Installer update identity stamping failed.' }
 Sign-GRFile $installer
 if (-not [GRBuildVerification]::IconMatches($installer,(Join-Path $root 'gr_gui\resources\gr-taskbar.ico'))) { throw 'Installer icon resources do not match the approved project ICO.' }

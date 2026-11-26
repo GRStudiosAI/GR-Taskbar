@@ -1,6 +1,6 @@
 #ifndef _H_AS_FACTORY_H_
 #define _H_AS_FACTORY_H_
-#include "ep_weather.h"
+#include "gr_weather.h"
 ULONG STDMETHODCALLTYPE epw_factory_AddRef(IClassFactory* _this);
 ULONG STDMETHODCALLTYPE epw_factory_Release(IClassFactory* _this);
 HRESULT STDMETHODCALLTYPE epw_factory_QueryInterface(

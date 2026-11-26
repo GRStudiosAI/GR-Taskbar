@@ -8,7 +8,7 @@
 #include <valinet/utility/osversion.h>
 #include <roapi.h>
 #include "utility.h"
-#include "../gr_gui/resources/EPSharedResources.h"
+#include "../gr_gui/resources/GRSharedResources.h"
 #endif
 
 #define EXIT_CODE_EXPLORER 1

@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="ep_setup_patch.c">
+    <ClCompile Include="gr_setup_patch.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\GR-Taskbar\utility.c">

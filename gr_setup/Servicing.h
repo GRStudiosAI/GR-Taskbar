@@ -73,6 +73,20 @@ static BOOL GRFail(PCWSTR operation, PCWSTR path, DWORD code)
     return FALSE;
 }
 
+static BOOL GRProcessCreatedSince(DWORD pid, const FILETIME* boundary, BOOL* fresh)
+{
+    *fresh = FALSE;
+    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!process) return FALSE;
+    FILETIME created, exited, kernel, user;
+    BOOL ok = GetProcessTimes(process, &created, &exited, &kernel, &user);
+    DWORD error = ok ? ERROR_SUCCESS : GetLastError();
+    CloseHandle(process);
+    if (ok) *fresh = CompareFileTime(&created, boundary) >= 0;
+    SetLastError(error);
+    return ok;
+}
+
 static BOOL GRStopExplorer(HWND tray)
 {
     if (!tray) return TRUE;

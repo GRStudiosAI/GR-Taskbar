@@ -3,7 +3,7 @@
 // #include <valinet/hooking/iatpatch.h>
 #include <valinet/utility/memmem.h>
 #include "../GR-Taskbar/utility.h"
-#include "ep_sm_forwards.h"
+#include "gr_sm_forwards.h"
 #pragma comment(lib, "Dbghelp.lib")
 
 HMODULE hModule = NULL;

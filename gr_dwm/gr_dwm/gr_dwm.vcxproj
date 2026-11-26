@@ -100,32 +100,32 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)\build\$(Configuration)\$(Platform)\</OutDir>
-    <TargetName>ep_dwm_svc</TargetName>
+    <TargetName>GR-Taskbar-DwmService</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)\build\$(Configuration)\$(Platform)\</OutDir>
-    <TargetName>ep_dwm_svc</TargetName>
+    <TargetName>GR-Taskbar-DwmService</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)\build\$(Configuration)\$(Platform)\</OutDir>
-    <TargetName>ep_dwm_svc</TargetName>
+    <TargetName>GR-Taskbar-DwmService</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)\build\$(Configuration)\$(Platform)\</OutDir>
-    <TargetName>ep_dwm_svc</TargetName>
+    <TargetName>GR-Taskbar-DwmService</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)\build\$(Configuration)\$(Platform)\</OutDir>
-    <TargetName>ep_dwm_svc</TargetName>
+    <TargetName>GR-Taskbar-DwmService</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)\build\$(Configuration)\$(Platform)\</OutDir>
-    <TargetName>ep_dwm_svc</TargetName>
+    <TargetName>GR-Taskbar-DwmService</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -218,14 +218,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="ep_dwm.c" />
+    <ClCompile Include="gr_dwm.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="ep_dwm.h" />
+    <ClInclude Include="gr_dwm.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="ep_dwm.rc" />
+    <ResourceCompile Include="gr_dwm.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

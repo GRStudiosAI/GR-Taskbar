@@ -86,6 +86,7 @@
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)\build\$(Configuration)\$(Platform)\</OutDir>
   </PropertyGroup>
+  <PropertyGroup Label="GRComponentIdentity"><TargetName>GR-Settings</TargetName></PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -123,23 +124,23 @@
     <ClCompile Include="..\GR-Taskbar\getline.c" />
     <ClCompile Include="..\GR-Taskbar\Localization.cpp" />
     <ClCompile Include="..\GR-Taskbar\utility.c" />
-    <ClCompile Include="..\gr_weather_host_stub\$(Platform)\$(Configuration)\ep_weather_host_i.c" />
+    <ClCompile Include="..\gr_weather_host_stub\$(Platform)\$(Configuration)\gr_weather_host_i.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="GUI.h" />
     <!--<ClInclude Include="GUI2.h" />-->
     <ClInclude Include="pch.h" />
-    <ClInclude Include="resources\EPSettingsResources.h" />
+    <ClInclude Include="resources\GRSettingsResources.h" />
     <ClInclude Include="OrbGallery.h" />
     <ClInclude Include="ThemeManager.h" />
     <ClInclude Include="..\GR-Taskbar\CustomOrb.h" />
-    <ClInclude Include="resources\EPSharedResources.h" />
+    <ClInclude Include="resources\GRSharedResources.h" />
     <ClInclude Include="resources\resource.h" />
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="resources\ep_gui.rc" />
-    <ResourceCompile Include="resources\lang\ep_gui.*.rc" />
-    <ResourceCompile Include="..\GR-Taskbar-L10N\resources\lang\ep_gui.*.rc" Condition="Exists('..\GR-Taskbar-L10N\resources\lang')" />
+    <ResourceCompile Include="resources\gr_gui.rc" />
+    <ResourceCompile Include="resources\lang\gr_gui.*.rc" />
+    <ResourceCompile Include="..\GR-Taskbar-L10N\resources\lang\gr_gui.*.rc" Condition="Exists('..\GR-Taskbar-L10N\resources\lang')" />
   </ItemGroup>
   <ItemGroup>
     <None Include="resources\settings.reg" />

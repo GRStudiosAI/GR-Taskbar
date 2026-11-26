@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="ep_setup.c">
+    <ClCompile Include="gr_setup.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\GR-Taskbar\utility.c">
@@ -31,10 +31,10 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="ep_setup.rc">
+    <ResourceCompile Include="gr_setup.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
-    <ResourceCompile Include="ep_setup_debug.rc">
+    <ResourceCompile Include="gr_setup_debug.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
   </ItemGroup>
@@ -48,9 +48,9 @@
     <None Include="..\build\Debug\GR-Taskbar.IA-32.dll" />
     <None Include="..\build\Release\ep_dwm.exe" />
     <None Include="..\build\Debug\ep_dwm.exe" />
-    <None Include="..\build\Debug\ep_weather_host.dll" />
-    <None Include="..\build\Release\ep_weather_host.dll" />
-    <None Include="..\build\Release\ep_weather_host_stub.dll" />
-    <None Include="..\build\Debug\ep_weather_host_stub.dll" />
+    <None Include="..\build\Debug\GR-Taskbar-WeatherHost.dll" />
+    <None Include="..\build\Release\GR-Taskbar-WeatherHost.dll" />
+    <None Include="..\build\Release\GR-Taskbar-WeatherProxy.dll" />
+    <None Include="..\build\Debug\GR-Taskbar-WeatherProxy.dll" />
   </ItemGroup>
 </Project>

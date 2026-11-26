@@ -86,6 +86,7 @@
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)\build\$(Configuration)\$(Platform)\</OutDir>
   </PropertyGroup>
+  <PropertyGroup Label="GRComponentIdentity"><TargetName>GR-Taskbar-ReleaseNotes</TargetName></PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -148,7 +149,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\GR-Taskbar\getline.c" />
-    <ClCompile Include="ep_generate_release_description.c" />
+    <ClCompile Include="gr_generate_release_description.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\GR-Taskbar\getline.h" />

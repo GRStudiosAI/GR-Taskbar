@@ -1,4 +1,5 @@
 #include "updates.h"
+#include "FixedUpdateSettings.h"
 
 #include <Shlwapi.h>
 #pragma comment(lib, "Shlwapi.lib")
@@ -519,7 +520,7 @@ BOOL IsUpdateAvailableHelper(
                                                     }
                                                 }
                                                 DWORD dwAllowDowngrades = FALSE, dwSize = sizeof(DWORD);
-                                                RegGetValueW(HKEY_CURRENT_USER, _T(REGPATH), L"UpdateAllowDowngrades", RRF_RT_DWORD, nullptr, &dwAllowDowngrades, &dwSize);
+                                                dwAllowDowngrades = FALSE;
                                                 if ((res == 1 && dwAllowDowngrades) || res == -1)
                                                 {
                                                     bIsUpdateAvailable = TRUE;
@@ -604,7 +605,7 @@ BOOL IsUpdateAvailableHelper(
                     if (bRet || (!bRet && GetLastError() == ERROR_FILE_NOT_FOUND))
                     {
                         DWORD bIsUsingEpMake = 0, dwSize = sizeof(DWORD);
-                        RegGetValueW(HKEY_CURRENT_USER, TEXT(REGPATH), L"UpdateUseLocal", RRF_RT_DWORD, nullptr, &bIsUsingEpMake, &dwSize);
+                        bIsUsingEpMake = FALSE;
                         if (bIsUsingEpMake) {
                             GetSystemDirectoryW(wszPath, MAX_PATH);
                             wcscat_s(wszPath, MAX_PATH, L"\\WindowsPowerShell\\v1.0\\powershell.exe");
@@ -849,7 +850,7 @@ BOOL IsUpdateAvailable(LPCWSTR wszDataStore, char* szCheckAgainst, BOOL* lpFail,
     if (hKey)
     {
         dwSize = sizeof(szUpdateURL);
-        RegQueryValueExW(
+        GRReadUpdateSetting(
             hKey,
             L"UpdateURL",
             nullptr,
@@ -866,7 +867,7 @@ BOOL IsUpdateAvailable(LPCWSTR wszDataStore, char* szCheckAgainst, BOOL* lpFail,
         if (wszInfoURL)
         {
             dwSize = sizeof(WCHAR) * cchInfoURL;
-            RegQueryValueExW(
+            GRReadUpdateSetting(
                 hKey,
                 L"UpdateURL",
                 nullptr,
@@ -880,7 +881,7 @@ BOOL IsUpdateAvailable(LPCWSTR wszDataStore, char* szCheckAgainst, BOOL* lpFail,
             }
         }
         dwSize = sizeof(DWORD);
-        RegQueryValueExW(
+        GRReadUpdateSetting(
             hKey,
             L"UpdateTimeout",
             nullptr,
@@ -889,7 +890,7 @@ BOOL IsUpdateAvailable(LPCWSTR wszDataStore, char* szCheckAgainst, BOOL* lpFail,
             &dwSize
         );
         dwSize = sizeof(DWORD);
-        RegQueryValueExW(
+        GRReadUpdateSetting(
             hKey,
             L"UpdatePreferStaging",
             nullptr,
@@ -902,7 +903,7 @@ BOOL IsUpdateAvailable(LPCWSTR wszDataStore, char* szCheckAgainst, BOOL* lpFail,
             szUpdateURL[0] = 0;
             wcscat_s(szUpdateURL, MAX_PATH, _T(UPDATES_RELEASE_INFO_URL_STAGING));
             dwSize = sizeof(szUpdateURL);
-            RegQueryValueExW(
+            GRReadUpdateSetting(
                 hKey,
                 L"UpdateURLStaging",
                 nullptr,
@@ -937,6 +938,10 @@ BOOL IsUpdateAvailable(LPCWSTR wszDataStore, char* szCheckAgainst, BOOL* lpFail,
 
 BOOL UpdateProduct(LPCWSTR wszDataStore, CToastData* toastData, BOOL bNoConfirmation, HMODULE hModule)
 {
+    if (!GR_UPDATER_VERIFIED) {
+        printf("[GR Taskbar Updates] Installation is disabled while the independent updater is being verified.\n");
+        return FALSE;
+    }
     HKEY hKey = nullptr;
     DWORD dwSize = 0;
     DWORD dwQueriedPolicy = 0;
@@ -965,7 +970,7 @@ BOOL UpdateProduct(LPCWSTR wszDataStore, CToastData* toastData, BOOL bNoConfirma
     if (hKey)
     {
         dwSize = sizeof(szUpdateURL);
-        RegQueryValueExW(
+        GRReadUpdateSetting(
             hKey,
             L"UpdateURL",
             nullptr,
@@ -980,7 +985,7 @@ BOOL UpdateProduct(LPCWSTR wszDataStore, CToastData* toastData, BOOL bNoConfirma
         wcscat_s(szUpdateURL, MAX_PATH, _T("/download/"));
         wcscat_s(szUpdateURL, MAX_PATH, _T(SETUP_UTILITY_NAME));
         dwSize = sizeof(DWORD);
-        RegQueryValueExW(
+        GRReadUpdateSetting(
             hKey,
             L"UpdateTimeout",
             nullptr,
@@ -989,7 +994,7 @@ BOOL UpdateProduct(LPCWSTR wszDataStore, CToastData* toastData, BOOL bNoConfirma
             &dwSize
         );
         dwSize = sizeof(BOOL);
-        RegQueryValueExW(
+        GRReadUpdateSetting(
             hKey,
             L"UpdatePreferStaging",
             nullptr,
@@ -1002,7 +1007,7 @@ BOOL UpdateProduct(LPCWSTR wszDataStore, CToastData* toastData, BOOL bNoConfirma
             szUpdateURL[0] = 0;
             wcscat_s(szUpdateURL, MAX_PATH, _T(UPDATES_RELEASE_INFO_URL_STAGING));
             dwSize = sizeof(szUpdateURL);
-            RegQueryValueExW(
+            GRReadUpdateSetting(
                 hKey,
                 L"UpdateURLStaging",
                 nullptr,
@@ -1088,6 +1093,10 @@ BOOL InstallUpdatesIfAvailable(
     DWORD bAllocConsole,
     DWORD dwUpdatePolicy)
 {
+    if (!GR_UPDATER_VERIFIED) {
+        printf("[GR Taskbar Updates] Installation is disabled while the independent updater is being verified.\n");
+        return FALSE;
+    }
     EP_L10N_ApplyPreferredLanguageForCurrentThread();
     wil::unique_hmodule hEPGui(LoadGuiModule());
 
@@ -1293,6 +1302,10 @@ extern "C" DWORD dwUpdatePolicy;
 
 DWORD CheckForUpdatesThread(LPVOID params)
 {
+    if (!GR_UPDATER_VERIFIED) {
+        printf("[GR Taskbar Updates] Automatic checks/installations are disabled during migration. Saved preferences are preserved.\n");
+        return ERROR_SUCCESS;
+    }
     DWORD timeout = (DWORD)(UINT_PTR)params;
     HRESULT hr = S_OK;
 

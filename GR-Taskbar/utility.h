@@ -1602,7 +1602,7 @@ inline HMODULE LoadGuiModule()
     wchar_t epGuiPath[MAX_PATH];
     ZeroMemory(epGuiPath, sizeof(epGuiPath));
     SHGetFolderPathW(NULL, SPECIAL_FOLDER, NULL, SHGFP_TYPE_CURRENT, epGuiPath);
-    wcscat_s(epGuiPath, MAX_PATH, _T(APP_RELATIVE_PATH) L"\\ep_gui.dll");
+    wcscat_s(epGuiPath, MAX_PATH, _T(APP_RELATIVE_PATH) L"\\GR-Settings.dll");
     return LoadLibraryExW(epGuiPath, NULL, LOAD_LIBRARY_AS_DATAFILE);
 }
 
@@ -1678,7 +1678,7 @@ inline BOOL DoesWindows10StartMenuExist()
                 if (!bRet)
                 {
                     SHGetFolderPathW(NULL, SPECIAL_FOLDER, NULL, SHGFP_TYPE_CURRENT, szPath);
-                    wcscat_s(szPath, MAX_PATH, _T(APP_RELATIVE_PATH) L"\\ep_starttiledata.dll");
+                    wcscat_s(szPath, MAX_PATH, _T(APP_RELATIVE_PATH) L"\\GR-Taskbar-StartTileData.dll");
 
                     HMODULE hMyStartTileData = LoadLibraryW(szPath);
                     if (hMyStartTileData)

@@ -15,9 +15,9 @@
 #define EP_CLSID "{D17F1E1A-5919-4427-8F89-A1A8503CA3EB}"
 #define DOSMODE_OFFSET 78
 #ifndef _M_ARM64
-#define SETUP_UTILITY_NAME "ep_setup.exe"
+#define SETUP_UTILITY_NAME "GR-Taskbar-Setup.exe"
 #else
-#define SETUP_UTILITY_NAME "ep_setup_arm64.exe"
+#define SETUP_UTILITY_NAME "GR-Taskbar-Setup.exe"
 #endif
 #define TOAST_BUFSIZ 1536
 #define SEH_REGPATH "Control Panel\\Quick Actions\\Control Center\\QuickActionsStateCapture\\GR-Taskbar"

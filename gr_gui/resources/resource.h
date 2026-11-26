@@ -1,6 +1,6 @@
 //{{NO_DEPENDENCIES}}
 // Microsoft Visual C++ generated include file.
-// Used by ep_gui.rc
+// Used by gr_gui.rc
 //
 #define IDR_REGISTRY1                   101
 #define IDR_REGISTRY2                   102
@@ -8,10 +8,10 @@
 #define IDS_PRODUCTNAME                 201
 
 // 301-500
-#include "EPSharedResources.h"
+#include "GRSharedResources.h"
 
 // 1001-2200
-#include "EPSettingsResources.h"
+#include "GRSettingsResources.h"
 
 // Next default values for new objects
 // 

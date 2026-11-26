@@ -86,7 +86,7 @@ __declspec(dllexport) int CALLBACK ZZTestBalloon(HWND hWnd, HINSTANCE hInstance,
 
 const wchar_t TestToastXML[] =
 L"<toast scenario=\"reminder\" "
-L"activationType=\"protocol\" launch=\"https://github.com/valinet/ExplorerPatcher\" duration=\"%s\">\r\n"
+L"activationType=\"protocol\" launch=\"https://github.com/GRStudiosAI/GR-Taskbar\" duration=\"%s\">\r\n"
 L"	<visual>\r\n"
 L"		<binding template=\"ToastGeneric\">\r\n"
 L"			<text><![CDATA[%s]]></text>\r\n"
@@ -392,7 +392,7 @@ void LaunchPropertiesGUI(HMODULE hModule)
     GetSystemDirectoryW(wszPath + 1, MAX_PATH);
     wcscat_s(wszPath, ARRAYSIZE(wszPath), L"\\rundll32.exe\" \"");
     SHGetFolderPathW(NULL, SPECIAL_FOLDER, NULL, SHGFP_TYPE_CURRENT, wszPath + wcslen(wszPath));
-    wcscat_s(wszPath, ARRAYSIZE(wszPath), _T(APP_RELATIVE_PATH) L"\\ep_gui.dll");
+    wcscat_s(wszPath, ARRAYSIZE(wszPath), _T(APP_RELATIVE_PATH) L"\\GR-Settings.dll");
     wcscat_s(wszPath, ARRAYSIZE(wszPath), L"\",ZZGUI");
 
     wprintf(L"Launching : %s\n", wszPath);
@@ -626,17 +626,21 @@ LSTATUS RegisterDWMService(DWORD dwDesiredState, DWORD dwOverride)
     WCHAR wszRundll32[MAX_PATH];
     SHGetFolderPathW(NULL, SPECIAL_FOLDER, NULL, SHGFP_TYPE_CURRENT, wszRundll32);
     wcscat_s(wszRundll32, MAX_PATH, _T(APP_RELATIVE_PATH));
-    wcscat_s(wszRundll32, MAX_PATH, L"\\ep_dwm_svc.exe");
+    wcscat_s(wszRundll32, MAX_PATH, L"\\GR-Taskbar-DwmService.exe");
 
     WCHAR wszArgumentsRegister[MAX_PATH * 10];
     swprintf_s(
         wszArgumentsRegister,
         MAX_PATH * 10,
         L"/c \""
-        L"\"%s\" create " _T(EP_DWM_SERVICENAME) L" binPath= \"\\\"%s\\\" %s\" DisplayName= \"ExplorerPatcher Desktop Window Manager Service\" start= auto & "
+        L"\"%s\" create " _T(EP_DWM_SERVICENAME) L" binPath= \"\\\"%s\\\" %s\" DisplayName= \"GR Taskbar Desktop Window Manager Service\" start= auto & "
+        L"\"%s\" config " _T(EP_DWM_SERVICENAME) L" binPath= \"\\\"%s\\\" %s\" DisplayName= \"GR Taskbar Desktop Window Manager Service\" start= auto & "
         L"\"%s\" description " _T(EP_DWM_SERVICENAME) L" \"Service for managing aspects related to the Desktop Window Manager.\" & "
         L"\"%s\" %s " _T(EP_DWM_SERVICENAME)
         L"\"",
+        wszSCPath,
+        wszRundll32,
+        _T(EP_DWM_SERVICENAME) L" " _T(EP_DWM_EVENTNAME),
         wszSCPath,
         wszRundll32,
         _T(EP_DWM_SERVICENAME) L" " _T(EP_DWM_EVENTNAME),

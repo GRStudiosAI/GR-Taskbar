@@ -1,6 +1,6 @@
 #include "TaskbarCenter.h"
 
-#include "../gr_weather_host/ep_weather_host_h.h"
+#include "../gr_weather_host/gr_weather_host_h.h"
 #include <intrin.h>
 
 extern "C"

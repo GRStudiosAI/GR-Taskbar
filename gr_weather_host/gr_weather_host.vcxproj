@@ -159,6 +159,7 @@
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)\build\$(Configuration)\$(Platform)\</OutDir>
   </PropertyGroup>
+  <PropertyGroup Label="GRComponentIdentity"><TargetName>GR-Taskbar-WeatherHost</TargetName></PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -292,27 +293,27 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="ep_weather.c" />
-    <ClCompile Include="ep_weather_factory.c" />
-    <ClCompile Include="ep_weather_host.c" />
+    <ClCompile Include="gr_weather.c" />
+    <ClCompile Include="gr_weather_factory.c" />
+    <ClCompile Include="gr_weather_host.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\gr_weather_host_stub\$(Platform)\$(Configuration)\ep_weather_host_h.h" />
+    <ClInclude Include="..\gr_weather_host_stub\$(Platform)\$(Configuration)\gr_weather_host_h.h" />
     <ClInclude Include="..\GR-Taskbar\def.h" />
-    <ClInclude Include="ep_weather.h" />
-    <ClInclude Include="ep_weather_error_html.h" />
-    <ClInclude Include="ep_weather_factory.h" />
-    <ClInclude Include="ep_weather_host.h" />
-    <ClInclude Include="ep_weather_provider_google_html.h" />
-    <ClInclude Include="ep_weather_provider_google_script.h" />
-    <ClInclude Include="ep_weather_utility.h" />
+    <ClInclude Include="gr_weather.h" />
+    <ClInclude Include="gr_weather_error_html.h" />
+    <ClInclude Include="gr_weather_factory.h" />
+    <ClInclude Include="gr_weather_host.h" />
+    <ClInclude Include="gr_weather_provider_google_html.h" />
+    <ClInclude Include="gr_weather_provider_google_script.h" />
+    <ClInclude Include="gr_weather_utility.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="ep_weather_host.rc" />
+    <ResourceCompile Include="gr_weather_host.rc" />
   </ItemGroup>
   <ItemGroup>
-    <Midl Include="..\gr_weather_host_stub\ep_weather_host.idl" />
+    <Midl Include="..\gr_weather_host_stub\gr_weather_host.idl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

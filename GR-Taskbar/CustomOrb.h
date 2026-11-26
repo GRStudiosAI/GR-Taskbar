@@ -14,6 +14,7 @@ typedef struct CustomOrbImage
     HBITMAP bitmap;
     UINT width;
     UINT frameHeight;
+    UINT sourceWidth, sourceHeight, sourceFrames;
     RECT contentBounds; // One shared alpha bound for all states; prevents jitter.
 } CustomOrbImage;
 
@@ -109,6 +110,7 @@ static BOOL CreateBuiltinOrbImage(DWORD style, CustomOrbImage* image)
     image->bitmap = bitmap;
     image->width = 256;
     image->frameHeight = 256;
+    image->sourceWidth = 256; image->sourceHeight = 768; image->sourceFrames = 3;
     return GRMeasureOrbContent(image);
 }
 
@@ -245,6 +247,7 @@ static BOOL LoadCustomOrbImage(PCWSTR path, CustomOrbImage* image)
             }
     }
     image->bitmap = bitmap; image->width = outWidth; image->frameHeight = outFrameHeight;
+    image->sourceWidth = width; image->sourceHeight = height; image->sourceFrames = single ? 1 : 3;
     ok = GRMeasureOrbContent(image);
 cleanup:
     if (!ok)

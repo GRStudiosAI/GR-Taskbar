@@ -64,7 +64,7 @@
   <PropertyGroup>
     <IntDir>$(ProjectDir)obj\$(Configuration)\$(Platform)\</IntDir>
     <OutDir>$(ProjectDir)bin\$(Configuration)\$(Platform)\</OutDir>
-    <OutDir Condition="Exists('..\ExplorerPatcher.sln')">..\build\$(Configuration)\$(Platform)\</OutDir>
+    <OutDir Condition="Exists('..\GR-Taskbar.sln')">..\build\$(Configuration)\$(Platform)\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)'=='Debug'">
     <LinkIncremental>true</LinkIncremental>
@@ -72,6 +72,7 @@
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
+  <PropertyGroup Label="GRComponentIdentity"><TargetName>GR-Taskbar-StartTileData</TargetName></PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -96,7 +97,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>runtimeobject.lib;ntdll.lib;ShLwApi.Lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <ModuleDefinitionFile>ep_starttiledata.def</ModuleDefinitionFile>
+      <ModuleDefinitionFile>gr_starttiledata.def</ModuleDefinitionFile>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
@@ -150,10 +151,10 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="ep_starttiledata.def" />
+    <Content Include="gr_starttiledata.def" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="idl\ep_starttiledata_idl.vcxproj">
+    <ProjectReference Include="idl\gr_starttiledata_idl.vcxproj">
       <Project>{3c5f7e1f-06e1-4492-90a8-40c17d7f22ad}</Project>
       <Name>ep_starttiledata_idl</Name>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>

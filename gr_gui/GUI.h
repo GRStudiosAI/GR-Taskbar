@@ -25,8 +25,8 @@ processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 #include "../GR-Taskbar/fmemopen.h"
 #include "../GR-Taskbar/Localization.h"
 #include "../GR-Taskbar/utility.h"
-#include "ep_weather.h"
-#include "ep_weather_host_h.h"
+#include "gr_weather.h"
+#include "gr_weather_host_h.h"
 
 #define MAX_LINE_LENGTH 2000
 extern HMODULE hModule;

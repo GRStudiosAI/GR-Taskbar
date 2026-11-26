@@ -1,4 +1,4 @@
-LIBRARY        ep_weather_host_stub.dll
+LIBRARY        GR-Taskbar-WeatherProxy.dll
 DESCRIPTION    'ExplorerPatcher Weather Stub DLL'
 EXPORTS        DllGetClassObject      @1 PRIVATE
                DllCanUnloadNow        @2 PRIVATE

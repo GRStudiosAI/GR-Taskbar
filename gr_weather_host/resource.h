@@ -1,6 +1,6 @@
 //{{NO_DEPENDENCIES}}
 // Microsoft Visual C++ generated include file.
-// Used by ep_weather_host.rc
+// Used by gr_weather_host.rc
 
 // Next default values for new objects
 // 

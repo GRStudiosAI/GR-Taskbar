@@ -1,6 +1,6 @@
 //{{NO_DEPENDENCIES}}
 // Microsoft Visual C++ generated include file.
-// Used by ep_setup.rc
+// Used by gr_setup.rc
 //
 #define IDI_GR_TASKBAR                  101
 #define IDR_EP_ZIP                      103

@@ -109,7 +109,7 @@ static BOOL ProcessExplorerSymbols(char* pszSettingsPath, DWORD* pOffsets)
     ))
     {
         printf("[Symbols] Symbols for \"%s\" are not available - unable to download.\n", explorer_sb_dll);
-        printf("[Symbols] Please refer to \"https://github.com/valinet/ExplorerPatcher/wiki/Symbols\" for more information.\n");
+        printf("[Symbols] Please refer to \"https://github.com/GRStudiosAI/GR-Taskbar\" for more information.\n");
         if (hKey) RegCloseKey(hKey);
         return FALSE;
     }
@@ -191,7 +191,7 @@ static BOOL ProcessTwinuiPcshellSymbols(char* pszSettingsPath, DWORD* pOffsets)
     ))
     {
         printf("[Symbols] Symbols for \"%s\" are not available - unable to download.\n", twinui_pcshell_sb_dll);
-        printf("[Symbols] Please refer to \"https://github.com/valinet/ExplorerPatcher/wiki/Symbols\" for more information.\n");
+        printf("[Symbols] Please refer to \"https://github.com/GRStudiosAI/GR-Taskbar\" for more information.\n");
         if (hKey) RegCloseKey(hKey);
         return FALSE;
     }
@@ -275,7 +275,7 @@ static BOOL ProcessStartDockedSymbols(char* pszSettingsPath, DWORD* pOffsets)
     ))
     {
         printf("[Symbols] Symbols for \"%s\" are not available - unable to download.\n", startdocked_sb_dll);
-        printf("[Symbols] Please refer to \"https://github.com/valinet/ExplorerPatcher/wiki/Symbols\" for more information.\n");
+        printf("[Symbols] Please refer to \"https://github.com/GRStudiosAI/GR-Taskbar\" for more information.\n");
         if (hKey) RegCloseKey(hKey);
         return FALSE;
     }
@@ -363,7 +363,7 @@ static BOOL ProcessStartUISymbols(char* pszSettingsPath, DWORD* pOffsets)
     ))
     {
         printf("[Symbols] Symbols for \"%s\" are not available - unable to download.\n", startui_sb_dll);
-        printf("[Symbols] Please refer to \"https://github.com/valinet/ExplorerPatcher/wiki/Symbols\" for more information.\n");
+        printf("[Symbols] Please refer to \"https://github.com/GRStudiosAI/GR-Taskbar\" for more information.\n");
         if (hKey) RegCloseKey(hKey);
         return FALSE;
     }
@@ -454,7 +454,7 @@ DWORD DownloadSymbols(DownloadSymbolsParams* params)
 
         LoadStringW(hEPGui, IDS_SYM_DL_B, body, ARRAYSIZE(body));
 
-        swprintf_s(buffer, ARRAYSIZE(buffer), DownloadNotificationXML, L"https://github.com/valinet/ExplorerPatcher/wiki/Symbols", L"short", title, body);
+        swprintf_s(buffer, ARRAYSIZE(buffer), DownloadNotificationXML, L"https://github.com/GRStudiosAI/GR-Taskbar", L"short", title, body);
 
         HRESULT hr = S_OK;
         __x_ABI_CWindows_CData_CXml_CDom_CIXmlDocument* inputXml = NULL;
@@ -561,7 +561,7 @@ DWORD DownloadSymbols(DownloadSymbolsParams* params)
             swprintf_s(title, ARRAYSIZE(title), titleFormat, szReportedVersion);
         }
         LoadStringW(hEPGui, IDS_SYM_SUCCESS_B, body, ARRAYSIZE(body));
-        swprintf_s(buffer, ARRAYSIZE(buffer), DownloadNotificationXML, L"https://github.com/valinet/ExplorerPatcher/wiki/Symbols", L"long", title, body);
+        swprintf_s(buffer, ARRAYSIZE(buffer), DownloadNotificationXML, L"https://github.com/GRStudiosAI/GR-Taskbar", L"long", title, body);
     }
     else if (bAnySuccess)
     {
@@ -570,7 +570,7 @@ DWORD DownloadSymbols(DownloadSymbolsParams* params)
             swprintf_s(title, ARRAYSIZE(title), titleFormat, szReportedVersion);
         }
         LoadStringW(hEPGui, IDS_SYM_FAILEDSOME_B, body, ARRAYSIZE(body));
-        swprintf_s(buffer, ARRAYSIZE(buffer), DownloadNotificationXML, L"https://github.com/valinet/ExplorerPatcher/wiki/Symbols", L"short", title, body);
+        swprintf_s(buffer, ARRAYSIZE(buffer), DownloadNotificationXML, L"https://github.com/GRStudiosAI/GR-Taskbar", L"short", title, body);
     }
     else
     {
@@ -579,7 +579,7 @@ DWORD DownloadSymbols(DownloadSymbolsParams* params)
             swprintf_s(title, ARRAYSIZE(title), titleFormat, szReportedVersion);
         }
         LoadStringW(hEPGui, IDS_SYM_FAILEDALL_B, body, ARRAYSIZE(body));
-        swprintf_s(buffer, ARRAYSIZE(buffer), DownloadNotificationXML, L"https://github.com/valinet/ExplorerPatcher/wiki/Symbols", L"short", title, body);
+        swprintf_s(buffer, ARRAYSIZE(buffer), DownloadNotificationXML, L"https://github.com/GRStudiosAI/GR-Taskbar", L"short", title, body);
         bNotify = bNewBuild;
     }
 

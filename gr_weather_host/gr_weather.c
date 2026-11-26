@@ -1,6 +1,6 @@
-#include "ep_weather.h"
-#include "ep_weather_factory.h"
-#include "ep_weather_host.h"
+#include "gr_weather.h"
+#include "gr_weather_factory.h"
+#include "gr_weather_host.h"
 
 HMODULE epw_hModule;
 DWORD epw_OutstandingObjects = 0;

@@ -159,6 +159,7 @@
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)\build\$(Configuration)\$(Platform)\</OutDir>
   </PropertyGroup>
+  <PropertyGroup Label="GRComponentIdentity"><TargetName>GR-Taskbar-WeatherProxy</TargetName></PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -171,7 +172,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>RpcRT4.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <ModuleDefinitionFile>ep_weather_host_stub.def</ModuleDefinitionFile>
+      <ModuleDefinitionFile>gr_weather_host_stub.def</ModuleDefinitionFile>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -190,7 +191,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>RpcRT4.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <ModuleDefinitionFile>ep_weather_host_stub.def</ModuleDefinitionFile>
+      <ModuleDefinitionFile>gr_weather_host_stub.def</ModuleDefinitionFile>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -205,7 +206,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>RpcRT4.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <ModuleDefinitionFile>ep_weather_host_stub.def</ModuleDefinitionFile>
+      <ModuleDefinitionFile>gr_weather_host_stub.def</ModuleDefinitionFile>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -224,7 +225,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>RpcRT4.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <ModuleDefinitionFile>ep_weather_host_stub.def</ModuleDefinitionFile>
+      <ModuleDefinitionFile>gr_weather_host_stub.def</ModuleDefinitionFile>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
@@ -239,7 +240,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>RpcRT4.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <ModuleDefinitionFile>ep_weather_host_stub.def</ModuleDefinitionFile>
+      <ModuleDefinitionFile>gr_weather_host_stub.def</ModuleDefinitionFile>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
@@ -258,7 +259,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>RpcRT4.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <ModuleDefinitionFile>ep_weather_host_stub.def</ModuleDefinitionFile>
+      <ModuleDefinitionFile>gr_weather_host_stub.def</ModuleDefinitionFile>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64EC'">
@@ -273,7 +274,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>RpcRT4.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <ModuleDefinitionFile>ep_weather_host_stub.def</ModuleDefinitionFile>
+      <ModuleDefinitionFile>gr_weather_host_stub.def</ModuleDefinitionFile>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64EC'">
@@ -292,28 +293,29 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>RpcRT4.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <ModuleDefinitionFile>ep_weather_host_stub.def</ModuleDefinitionFile>
+      <ModuleDefinitionFile>gr_weather_host_stub.def</ModuleDefinitionFile>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <Midl Include="ep_weather_host.idl">
+    <Midl Include="gr_weather_host.idl">
       <OutputDirectory>$(IntDir)</OutputDirectory>
+      <DllDataFileName>gr_weather_proxy_data.c</DllDataFileName>
     </Midl>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="$(IntDir)\dlldata.c">
+    <ClCompile Include="$(IntDir)\gr_weather_proxy_data.c">
       <PreprocessorDefinitions>REGISTER_PROXY_DLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
-    <ClCompile Include="$(IntDir)\ep_weather_host_i.c" />
-    <ClCompile Include="$(IntDir)\ep_weather_host_p.c">
+    <ClCompile Include="$(IntDir)\gr_weather_host_i.c" />
+    <ClCompile Include="$(IntDir)\gr_weather_host_p.c">
       <PreprocessorDefinitions>REGISTER_PROXY_DLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="ep_weather_host_h.h" />
+    <ClInclude Include="$(IntDir)\gr_weather_host_h.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="ep_weather_host_stub.def" />
+    <None Include="gr_weather_host_stub.def" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <Midl Include="ep_weather_host.idl">
+    <Midl Include="gr_weather_host.idl">
       <Filter>Source Files</Filter>
     </Midl>
   </ItemGroup>
@@ -23,20 +23,20 @@
     <ClCompile Include="dlldata.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="ep_weather_host_i.c">
+    <ClCompile Include="gr_weather_host_i.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="ep_weather_host_p.c">
+    <ClCompile Include="gr_weather_host_p.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="ep_weather_host_h.h">
+    <ClInclude Include="gr_weather_host_h.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="ep_weather_host_stub.def">
+    <None Include="gr_weather_host_stub.def">
       <Filter>Source Files</Filter>
     </None>
   </ItemGroup>

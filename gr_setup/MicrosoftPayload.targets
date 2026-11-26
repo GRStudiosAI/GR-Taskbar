@@ -1,0 +1,35 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!-- Retain the existing pinned Microsoft payload versions. Cache outside the
+       disposable packaging folder and verify every reuse before packaging. -->
+  <ItemGroup Condition="'$(Platform)' == 'x64'">
+    <GRMicrosoftPayload Include="$(MSBuildProjectDirectory)\..\build\dependency-cache\x64\pnidui\pnidui.dll">
+      <Category>pnidui</Category>
+      <SourceUrl>https://msdl.microsoft.com/download/symbols/pnidui.dll/F717CABC20B000/pnidui.dll</SourceUrl>
+      <ExpectedSHA256>52E9C88CB50EF98E683839AB62880180F0DD3DB3E1C445EA461AE63D97A349D3</ExpectedSHA256>
+    </GRMicrosoftPayload>
+    <GRMicrosoftPayload Include="$(MSBuildProjectDirectory)\..\build\dependency-cache\x64\StartUI\StartUI.dll">
+      <Category>StartUI</Category>
+      <SourceUrl>https://msdl.microsoft.com/download/symbols/startui.dll/C1AEED44852000/startui.dll</SourceUrl>
+      <ExpectedSHA256>715B75B289DD2EFC34FB0FFD924FCD38A34FEE9FC5E93A207FCADA7CB38F6508</ExpectedSHA256>
+    </GRMicrosoftPayload>
+    <GRMicrosoftPayload Include="$(MSBuildProjectDirectory)\..\build\dependency-cache\x64\JumpViewUI\JumpViewUI.dll">
+      <Category>JumpViewUI</Category>
+      <SourceUrl>https://msdl.microsoft.com/download/symbols/jumpviewui.dll/C814664216A000/jumpviewui.dll</SourceUrl>
+      <ExpectedSHA256>3E81CECF171D697DBF08E97CDC0ED60158D6FB405E9897D54890CF20E35EF856</ExpectedSHA256>
+    </GRMicrosoftPayload>
+  </ItemGroup>
+  <Target Name="AcquireGRMicrosoftPayload" BeforeTargets="CreateZip" Condition="'$(Platform)' == 'x64'">
+    <MakeDir Directories="@(GRMicrosoftPayload->'%(RootDir)%(Directory)')" />
+    <DownloadFile SourceUrl="%(GRMicrosoftPayload.SourceUrl)"
+      DestinationFolder="%(GRMicrosoftPayload.RootDir)%(GRMicrosoftPayload.Directory)"
+      DestinationFileName="%(GRMicrosoftPayload.Filename)%(GRMicrosoftPayload.Extension)"
+      Condition="!Exists('%(GRMicrosoftPayload.Identity)')" Retries="3" />
+    <GetFileHash Files="@(GRMicrosoftPayload)" Algorithm="SHA256">
+      <Output TaskParameter="Items" ItemName="GRCheckedMicrosoftPayload" />
+    </GetFileHash>
+    <Error Condition="'%(GRCheckedMicrosoftPayload.FileHash)' != '%(GRCheckedMicrosoftPayload.ExpectedSHA256)'"
+      Text="Microsoft payload integrity check failed: %(GRCheckedMicrosoftPayload.Identity). Build stopped; the cached file was not packaged." />
+    <Copy SourceFiles="@(GRMicrosoftPayload)"
+      DestinationFiles="@(GRMicrosoftPayload->'$(MSBuildProjectDirectory)\..\build\$(Configuration)\$(Platform)\gr_setup_files\%(Category)\%(Filename)%(Extension)')" />
+  </Target>
+</Project>

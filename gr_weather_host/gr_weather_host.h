@@ -1,8 +1,8 @@
 #ifndef _H_AS_SERVICE_P_H_
 #define _H_AS_SERVICE_P_H_
-#include "ep_weather.h"
-#include "ep_weather_utility.h"
-#include "ep_weather_host_h.h"
+#include "gr_weather.h"
+#include "gr_weather_utility.h"
+#include "gr_weather_host_h.h"
 #include "../GR-Taskbar/def.h"
 #include <windowsx.h>
 #include <ShlObj.h>

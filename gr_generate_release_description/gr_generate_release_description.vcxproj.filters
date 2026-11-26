@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="ep_generate_release_description.c">
+    <ClCompile Include="gr_generate_release_description.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\GR-Taskbar\getline.c">

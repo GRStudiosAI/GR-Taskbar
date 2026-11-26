@@ -2,6 +2,37 @@
 
 Developed and maintained by GR Studios AI LLC.
 
+## 26100.9711.71.14 — November 26, 2026 (development)
+
+- Corrected an observed update race: Windows may restart Explorer before DLL
+  publication ends, leaving an old mapped renderer behind newly versioned files.
+- The installer now accepts only a responsive shell process created after its
+  post-publication boundary, with bounded reloads of an early respawn.
+- Added native process-creation tests for pre-publication, post-publication and
+  invalid processes. Full file-servicing regression checks pass.
+
+On the live PC, reloading after 71.13 publication activated the new custom painter.
+Its normal/hover transition was recorded without the native blue square. After
+the 71.14 live update, native records captured normal frame 0, hover frame 1 and
+pressed frame 2. The user confirmed the issue was working on the live PC.
+
+## 26100.9711.71.13 — November 26, 2026 (development)
+
+- Replaced custom Start button painting independently of the native tinted-glyph
+  cache and blue highlight. Windows retains activation and keyboard handling.
+- Added native accessibility state selection with an on-paint pointer fallback;
+  normal, hover and pressed/active artwork share the same transparent layout.
+- Restored Automatic sizing to 24 logical pixels on a 40-pixel taskbar.
+- Added bounded, opt-in Start icon diagnostics and isolated paint regression tests.
+- Corrected renamed component, resource and generated proxy build references.
+- Included StartTileData explicitly in the signed build and required-payload checks.
+- Added SHA-256 verification and persistent caching for pinned x64 Microsoft payloads.
+- Updated existing DWM service configuration to reference the renamed executable.
+- Disabled updater networking during migration pending release-path verification.
+
+Installed desktop hover/pressed/active validation is still required. This entry
+does not certify full retro skins, gallery redevelopment or all installation paths.
+
 ## 26100.9711.71.10 — November 25, 2026
 
 ### Installer improvements
