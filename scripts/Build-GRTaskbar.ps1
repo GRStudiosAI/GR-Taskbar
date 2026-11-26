@@ -15,10 +15,11 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-if (-not $WorkRoot) { $WorkRoot = Join-Path (Split-Path $root -Parent) 'work' }
+if (-not $WorkRoot) { $WorkRoot = Join-Path $root 'release-work' }
+$WorkRoot = Join-Path $WorkRoot $Platform
 $WorkRoot = [IO.Path]::GetFullPath($WorkRoot)
 if (-not $PublicCertificatePath) {
-    $PublicCertificatePath = Join-Path (Split-Path $root -Parent) 'GR-Taskbar-Signing\GR-Taskbar-Public.cer'
+    $PublicCertificatePath = Join-Path $root 'scripts\signing\GR-Taskbar-Public.cer'
 }
 if (-not $CertificateThumbprint) {
     if (-not (Test-Path -LiteralPath $PublicCertificatePath)) { throw 'Provide a public certificate path or GR_SIGN_CERT_THUMBPRINT. Never put a PFX/password in the repository.' }
@@ -81,6 +82,9 @@ if (-not $SkipCompile) {
         Remove-Item -LiteralPath $resolved -Recurse -Force
     }
     Invoke-GRBuild -Label compile -Commands @(
+        'nuget restore GR-Taskbar.sln',
+        'nuget restore gr_starttiledata\gr_starttiledata.slnx',
+        ('call BuildDependencies{0}.bat' -f $Configuration),
         ('"{0}" GR-Taskbar.sln /m /p:Configuration={1} /p:Platform=IA-32 /v:minimal' -f $msbuild,$Configuration),
         ('"{0}" gr_starttiledata\gr_starttiledata.vcxproj /m /p:Configuration={1} /p:Platform={2} "/p:SolutionDir={3}/" /v:minimal' -f $msbuild,$Configuration,$arch,$root.Replace('\','/')),
         ('"{0}" GR-Taskbar.sln /m /p:Configuration={1} /p:Platform={2} /v:minimal' -f $msbuild,$Configuration,$Platform)
@@ -149,7 +153,7 @@ Sign-GRFile $installer
 if (-not [GRBuildVerification]::IconMatches($installer,(Join-Path $root 'gr_gui\resources\gr-taskbar.ico'))) { throw 'Installer icon resources do not match the approved project ICO.' }
 
 $release = Join-Path $WorkRoot 'outputs'
-$finalName = if ($Platform -eq 'amd64') { 'GR-Taskbar-Setup.exe' } else { 'GR-Taskbar-Setup-arm64.exe' }
+$finalName = if ($Platform -eq 'amd64') { 'GR-Taskbar-Setup.exe' } else { 'GR-Taskbar-Setup-ARM64.exe' }
 $final = Join-Path $release $finalName
 Copy-Item -LiteralPath $installer -Destination $final -Force
 Copy-Item -LiteralPath $catalog -Destination (Join-Path $release 'GR-Taskbar.cat') -Force
