@@ -1,53 +1,86 @@
-# GR Taskbar Security Policy
-
-## Security Commitment
-
-GR Studios AI LLC aims to maintain a secure and reliable
-Windows customization application.
+# Security Policy
 
 ## Supported Versions
 
-Security maintenance prioritizes the latest official
-supported release.
+GR Taskbar is developed and maintained by GR Studios AI LLC. Security updates are prioritized for the latest official stable release.
 
-Specific supported versions will be documented as the
-release and maintenance policies are established.
+| Version | Supported |
+| ------- | --------- |
+| Latest stable release | :white_check_mark: |
+| Current development version | :white_check_mark: |
+| Previous stable releases | :x: |
+| Discontinued versions | :x: |
+| Unofficial third-party builds | :x: |
+
+Users are encouraged to keep GR Taskbar updated to the latest official supported version.
 
 ## Reporting a Vulnerability
 
-Do not publish sensitive vulnerability details in
-public issues or discussions.
-
-Use GitHub private vulnerability reporting when enabled:
+If you discover a security vulnerability in GR Taskbar, please report it privately through GitHub's vulnerability reporting system:
 
 https://github.com/GRStudiosAI/GR-Taskbar/security/advisories/new
 
-Include:
+Do not disclose security vulnerabilities through public issues, discussions, or social media before they have been investigated.
 
-- Affected GR Taskbar version.
-- Windows version and architecture.
+Please include the following information:
+
+- GR Taskbar version.
+- Windows version and build number.
+- System architecture.
 - Affected component.
-- Description of the vulnerability.
-- Reproduction information.
+- Detailed description of the vulnerability.
+- Steps to reproduce the vulnerability safely.
 - Potential security impact.
-- Relevant sanitized diagnostic logs.
+- Relevant sanitized logs or screenshots.
 
-Do not include passwords, private keys, access tokens,
-or other confidential information.
+## Response and Resolution
 
-## Security Review
+GR Studios AI LLC aims to:
 
-Reports will be reviewed by project maintainers.
-Response and resolution times depend on severity,
-complexity, and available development resources.
+- Acknowledge vulnerability reports within 72 hours.
+- Provide an initial assessment within seven business days.
+- Provide progress updates when significant developments occur.
+- Prioritize confirmed vulnerabilities according to their severity.
+- Develop, test, and distribute security fixes when appropriate.
 
-## Official Distribution
+If a vulnerability is accepted, it will be investigated and addressed according to its severity and complexity.
 
-Obtain GR Taskbar releases from official GR Studios AI
-distribution channels.
+If a vulnerability is declined, the reporter will receive an explanation when possible.
 
-Never distribute modified installers as official releases.
+Response and resolution times may vary depending on available resources and the complexity of the reported issue.
 
-## Project Administration
+## Responsible Disclosure
 
-GR Studios AI LLC
+Security researchers must conduct testing only on systems they own or have explicit authorization to test.
+
+Reporters are requested to coordinate disclosure with GR Studios AI LLC and allow reasonable time for investigation and remediation.
+
+## Software Integrity
+
+GR Taskbar aims to maintain secure software distribution through:
+
+- Authenticode digital signatures.
+- SHA-256 integrity checksums.
+- Secure update mechanisms.
+- Safe installation and rollback procedures.
+- Protection of native Windows system components.
+- Preservation of user settings.
+- Secure dependency management.
+
+## Security Advisories
+
+Official security advisories will be available at:
+
+https://github.com/GRStudiosAI/GR-Taskbar/security/advisories
+
+## Official Repository
+
+https://github.com/GRStudiosAI/GR-Taskbar
+
+---
+
+**GR Taskbar**
+
+Developed and maintained by GR Studios AI LLC.
+
+**Where Imagination Meets Intelligence.**
