@@ -7,9 +7,3 @@
 [submodule "libs/zlib"]
 	path = libs/zlib
 	url = https://github.com/madler/zlib
-[submodule "ep_starttiledata"]
-	path = gr_starttiledata
-	url = https://github.com/ExplorerPatcher/ep_starttiledata
-[submodule "GR-Taskbar-L10N"]
-	path = GR-Taskbar-L10N
-	url = https://github.com/valinet/ExplorerPatcher-L10N
