@@ -1,10 +1,6 @@
 name: GR Taskbar - Official Build
 
 on:
-  push:
-    branches:
-      - master
-
   workflow_dispatch:
     inputs:
       configuration:
@@ -245,7 +241,7 @@ jobs:
 
                   $microsoftSigner = (
                       $null -ne $sig.SignerCertificate -and
-                      $signer -match 'O=Microsoft Corporation(?:,|$)'
+                      $signer -match '(?:^|,)\s*O\s*=\s*Microsoft Corporation\s*(?:,|$)'
                   )
 
                   $signaturePassed = (
@@ -299,7 +295,7 @@ jobs:
         run: |
           $output = "build/$env:BUILD_CONFIGURATION"
 
-          if (-not (Test-Path -LiteralPath $output)) {
+          if (-not (Test-Path $output)) {
               throw "Build output directory is missing."
           }
 
