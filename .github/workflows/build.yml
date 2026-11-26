@@ -57,7 +57,13 @@ jobs:
         uses: microsoft/setup-msbuild@v3
 
       - name: Configure NuGet
-        uses: nuget/setup-nuget@v2
+        shell: pwsh
+        run: |
+          Get-Command nuget.exe -ErrorAction Stop
+          nuget help
+          if ($LASTEXITCODE -ne 0) {
+              throw "NuGet initialization failed."
+          }
 
       - name: Validate source files
         shell: pwsh
@@ -99,31 +105,27 @@ jobs:
           }
 
       - name: Compile build dependencies
-        shell: pwsh
+        shell: cmd
         run: |
-          $script = ".\BuildDependencies$($env:BUILD_CONFIGURATION).bat"
-
-          if (-not (Test-Path $script)) {
-              throw "Missing dependency build script: $script"
-          }
-
-          & $script
-
-          if ($LASTEXITCODE -ne 0) {
-              throw "Dependency compilation failed."
-          }
+          call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+          if errorlevel 1 exit /b 1
+          if not defined VSINSTALLDIR exit /b 1
+          where cl.exe
+          if errorlevel 1 exit /b 1
+          where cmake.exe
+          if errorlevel 1 exit /b 1
+          if not exist "BuildDependencies%BUILD_CONFIGURATION%.bat" exit /b 1
+          call "BuildDependencies%BUILD_CONFIGURATION%.bat"
+          if errorlevel 1 exit /b 1
 
       - name: Compile GR Taskbar
-        shell: pwsh
+        shell: cmd
         run: |
-          msbuild build.proj /m `
-              "/p:Configuration=$env:BUILD_CONFIGURATION" `
-              /verbosity:minimal `
-              /bl:GR-Taskbar-Build.binlog
-
-          if ($LASTEXITCODE -ne 0) {
-              throw "GR Taskbar compilation failed."
-          }
+          call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+          if errorlevel 1 exit /b 1
+          if not defined VSINSTALLDIR exit /b 1
+          msbuild build.proj /m /p:Configuration=%BUILD_CONFIGURATION% /verbosity:minimal /bl:GR-Taskbar-Build.binlog
+          if errorlevel 1 exit /b 1
 
       - name: Inspect generated binaries
         shell: pwsh
@@ -146,7 +148,7 @@ jobs:
           $files | Select-Object FullName, Length
 
       - name: Upload GR Taskbar build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: GR-Taskbar-${{ env.BUILD_CONFIGURATION }}-${{ github.sha }}
           path: build/${{ env.BUILD_CONFIGURATION }}/
@@ -155,7 +157,7 @@ jobs:
 
       - name: Upload build diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: GR-Taskbar-Build-Diagnostics
           path: GR-Taskbar-Build.binlog
