@@ -1,0 +1,439 @@
+﻿name: GR Taskbar - Automatic Changelog
+
+on:
+  workflow_run:
+    workflows:
+      - GR Taskbar - Official Build
+    types:
+      - completed
+    branches:
+      - master
+
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: Successful official build run ID
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: gr-taskbar-changelog
+  cancel-in-progress: false
+
+jobs:
+  changelog:
+    name: Generate numbered build changelog
+
+    if: >
+      github.repository == 'GRStudiosAI/GR-Taskbar' &&
+      github.ref == 'refs/heads/master' &&
+      (github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success')
+
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 20
+
+    steps:
+      - name: Identify successful Release build
+        id: build
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_RUN_ID: ${{ github.event.workflow_run.id || inputs.build_run_id }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          if ($env:BUILD_RUN_ID -notmatch '^[0-9]+$') {
+              throw "Invalid build run ID."
+          }
+
+          $json = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:BUILD_RUN_ID"
+
+          if ($LASTEXITCODE -ne 0) {
+              throw "Unable to retrieve original build."
+          }
+
+          $run = $json | ConvertFrom-Json
+
+          if ($run.conclusion -ne "success" -or
+              $run.path -ne ".github/workflows/build.yml" -or
+              $run.head_branch -ne "master" -or
+              $run.head_repository.full_name -ne $env:GITHUB_REPOSITORY) {
+              throw "Selected run is not a successful official build."
+          }
+
+          $json = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:BUILD_RUN_ID/artifacts?per_page=100"
+
+          if ($LASTEXITCODE -ne 0) {
+              throw "Unable to retrieve build artifacts."
+          }
+
+          $artifacts = $json | ConvertFrom-Json
+
+          foreach ($arch in @("amd64", "arm64")) {
+              $name = "GR-Taskbar-Release-$arch-$($run.head_sha)"
+
+              $matching = @(
+                  $artifacts.artifacts | Where-Object {
+                      $_.name -eq $name -and -not $_.expired
+                  }
+              )
+
+              if ($matching.Count -ne 1) {
+                  if ($env:GITHUB_EVENT_NAME -eq "workflow_run") {
+                      "eligible=false" >> $env:GITHUB_OUTPUT
+                      Write-Host "No complete Release artifacts. Skipping."
+                      exit 0
+                  }
+
+                  throw "Missing or expired Release artifact: $name"
+              }
+          }
+
+          "eligible=true" >> $env:GITHUB_OUTPUT
+          "run_id=$($run.id)" >> $env:GITHUB_OUTPUT
+          "sha=$($run.head_sha)" >> $env:GITHUB_OUTPUT
+          "build_date=$($run.updated_at)" >> $env:GITHUB_OUTPUT
+
+      - name: Checkout current changelog history
+        if: steps.build.outputs.eligible == 'true'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: master
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Retrieve AMD64 installer
+        if: steps.build.outputs.eligible == 'true'
+        uses: actions/download-artifact@v7
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.build.outputs.run_id }}
+          name: GR-Taskbar-Release-amd64-${{ steps.build.outputs.sha }}
+          path: changelog-input/amd64
+
+      - name: Retrieve ARM64 installer
+        if: steps.build.outputs.eligible == 'true'
+        uses: actions/download-artifact@v7
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.build.outputs.run_id }}
+          name: GR-Taskbar-Release-arm64-${{ steps.build.outputs.sha }}
+          path: changelog-input/arm64
+
+      - name: Generate and save numbered changelog
+        if: steps.build.outputs.eligible == 'true'
+        shell: pwsh
+        env:
+          BUILD_RUN_ID: ${{ steps.build.outputs.run_id }}
+          BUILD_SHA: ${{ steps.build.outputs.sha }}
+          BUILD_DATE: ${{ steps.build.outputs.build_date }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          function Invoke-Git {
+              param([string[]]$Arguments)
+
+              $result = & git @Arguments
+
+              if ($LASTEXITCODE -ne 0) {
+                  throw "Git command failed: $($Arguments -join ' ')"
+              }
+
+              return $result
+          }
+
+          $amd64 = Get-Item "changelog-input/amd64/GR-Taskbar-Setup.exe"
+          $arm64 = Get-Item "changelog-input/arm64/GR-Taskbar-Setup-ARM64.exe"
+
+          $a = $amd64.VersionInfo
+          $b = $arm64.VersionInfo
+
+          $version = "{0}.{1}.{2}.{3}" -f `
+              $a.ProductMajorPart, `
+              $a.ProductMinorPart, `
+              $a.ProductBuildPart, `
+              $a.ProductPrivatePart
+
+          $armVersion = "{0}.{1}.{2}.{3}" -f `
+              $b.ProductMajorPart, `
+              $b.ProductMinorPart, `
+              $b.ProductBuildPart, `
+              $b.ProductPrivatePart
+
+          if ($version -ne $armVersion) {
+              throw "Installer versions do not match."
+          }
+
+          $root = "changelogs"
+          $indexPath = "$root/index.json"
+          $repository = "https://github.com/$env:GITHUB_REPOSITORY"
+
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+
+          $entries = @()
+
+          if (Test-Path -LiteralPath $indexPath) {
+              $entries = @(
+                  Get-Content -LiteralPath $indexPath -Raw |
+                      ConvertFrom-Json
+              )
+          }
+
+          $existing = @(
+              $entries | Where-Object {
+                  "$($_.build_run_id)" -eq $env:BUILD_RUN_ID
+              }
+          )
+
+          if ($existing.Count -gt 0) {
+              if ($existing.Count -ne 1 -or
+                  $existing[0].source_commit -ne $env:BUILD_SHA) {
+                  throw "Existing changelog identity mismatch."
+              }
+
+              Write-Host "Changelog already exists for this build."
+              exit 0
+          }
+
+          $numbers = @(
+              Get-ChildItem $root -Directory |
+                  Where-Object { $_.Name -match '^\d{6}$' } |
+                  ForEach-Object { [int]$_.Name }
+          )
+
+          $next = 1
+
+          if ($numbers.Count -gt 0) {
+              $next = ($numbers | Measure-Object -Maximum).Maximum + 1
+          }
+
+          if ($next -gt 999999) {
+              throw "Changelog numbering limit reached."
+          }
+
+          $number = "{0:D6}" -f $next
+          $folder = "$root/$number"
+
+          if (Test-Path -LiteralPath $folder) {
+              throw "Changelog folder already exists."
+          }
+
+          Invoke-Git -Arguments @(
+              "fetch", "origin", $env:BUILD_SHA
+          ) | Out-Null
+
+          $previous = $null
+
+          foreach ($entry in ($entries | Sort-Object number -Descending)) {
+              if (-not $entry.source_commit) {
+                  continue
+              }
+
+              git merge-base --is-ancestor `
+                  $entry.source_commit $env:BUILD_SHA
+
+              if ($LASTEXITCODE -eq 0) {
+                  $previous = $entry
+                  break
+              }
+          }
+
+          $range = $env:BUILD_SHA
+
+          if ($previous) {
+              $range = "$($previous.source_commit)..$env:BUILD_SHA"
+          }
+
+          $history = @(
+              Invoke-Git -Arguments @(
+                  "log",
+                  "--format=%H%x09%s",
+                  $range,
+                  "--",
+                  ".",
+                  ":(exclude)changelogs/**",
+                  ":(exclude)CHANGELOG.md"
+              )
+          )
+
+          $groups = [ordered]@{
+              "Added" = @()
+              "Improved" = @()
+              "Fixed" = @()
+              "Changed" = @()
+              "Removed" = @()
+              "Security" = @()
+          }
+
+          foreach ($line in $history) {
+              $parts = $line -split "`t", 2
+
+              if ($parts.Count -ne 2) {
+                  continue
+              }
+
+              $sha = $parts[0]
+              $message = $parts[1]
+
+              if ($message -match '^docs: generate changelog') {
+                  continue
+              }
+
+              $category = switch -Regex ($message) {
+                  '^(security|secure|harden)' {
+                      "Security"; break
+                  }
+                  '^(fix|bugfix|resolve|correct)' {
+                      "Fixed"; break
+                  }
+                  '^(feat|add|introduce|implement)' {
+                      "Added"; break
+                  }
+                  '^(improve|enhance|optimize|perf)' {
+                      "Improved"; break
+                  }
+                  '^(remove|delete|drop)' {
+                      "Removed"; break
+                  }
+                  default {
+                      "Changed"
+                  }
+              }
+
+              $message = [System.Net.WebUtility]::HtmlEncode($message)
+
+              $groups[$category] += "- $message ([$($sha.Substring(0,7))]($repository/commit/$sha))"
+          }
+
+          $lines = @(
+              "# GR Taskbar Changelog $number",
+              "",
+              "## Build Information",
+              "",
+              "| Property | Details |",
+              "| --- | --- |",
+              "| Product | GR Taskbar |",
+              "| Version | $version |",
+              "| Changelog Number | $number |",
+              "| Build Run ID | $env:BUILD_RUN_ID |",
+              "| Build Date | $env:BUILD_DATE |",
+              "| Source Commit | $env:BUILD_SHA |",
+              "| Architectures | AMD64 and ARM64 |",
+              "| Developer | GR Studios AI LLC |",
+              "",
+              "## Development Changes",
+              ""
+          )
+
+          $hasChanges = $false
+
+          foreach ($category in $groups.Keys) {
+              if ($groups[$category].Count -gt 0) {
+                  $hasChanges = $true
+                  $lines += "### $category"
+                  $lines += ""
+                  $lines += $groups[$category]
+                  $lines += ""
+              }
+          }
+
+          if (-not $hasChanges) {
+              $lines += "No additional source changes were recorded."
+              $lines += ""
+          }
+
+          $lines += @(
+              "## Build References",
+              "",
+              "- [Original build]($repository/actions/runs/$env:BUILD_RUN_ID)",
+              "- [Source code]($repository/tree/$env:BUILD_SHA)",
+              "",
+              "---",
+              "",
+              "**GR Studios AI LLC**",
+              "",
+              "*Where Imagination Meets Intelligence.*"
+          )
+
+          New-Item -ItemType Directory -Path $folder | Out-Null
+
+          $lines | Set-Content `
+              -LiteralPath "$folder/CHANGELOG.md" `
+              -Encoding utf8
+
+          $metadata = [ordered]@{
+              number = $number
+              version = $version
+              build_run_id = $env:BUILD_RUN_ID
+              source_commit = $env:BUILD_SHA
+              build_date = $env:BUILD_DATE
+              architectures = @("amd64", "arm64")
+              changelog = "$folder/CHANGELOG.md"
+              previous_build_run_id = if ($previous) {
+                  $previous.build_run_id
+              } else {
+                  $null
+              }
+          }
+
+          $metadata | ConvertTo-Json -Depth 10 |
+              Set-Content "$folder/build-info.json" -Encoding utf8
+
+          $entries += [pscustomobject]$metadata
+
+          ConvertTo-Json -InputObject @($entries) -Depth 10 |
+              Set-Content $indexPath -Encoding utf8
+
+          $master = @(
+              "# GR Taskbar - Complete Changelog",
+              "",
+              "Official build history maintained automatically.",
+              ""
+          )
+
+          foreach ($entry in ($entries | Sort-Object number -Descending)) {
+              $master += "## Changelog $($entry.number) - Version $($entry.version)"
+              $master += ""
+              $master += "- Build: $($entry.build_run_id)"
+              $master += "- Date: $($entry.build_date)"
+              $master += "- [Complete changelog]($($entry.changelog))"
+              $master += ""
+          }
+
+          $master | Set-Content CHANGELOG.md -Encoding utf8
+
+          Invoke-Git -Arguments @(
+              "config", "user.name", "github-actions[bot]"
+          ) | Out-Null
+
+          Invoke-Git -Arguments @(
+              "config", "user.email",
+              "41898282+github-actions[bot]@users.noreply.github.com"
+          ) | Out-Null
+
+          Invoke-Git -Arguments @(
+              "add", "--", "changelogs", "CHANGELOG.md"
+          ) | Out-Null
+
+          Invoke-Git -Arguments @(
+              "diff", "--cached", "--check"
+          ) | Out-Null
+
+          Invoke-Git -Arguments @(
+              "commit", "-m",
+              "docs: generate changelog $number for build $env:BUILD_RUN_ID"
+          )
+
+          Invoke-Git -Arguments @(
+              "push", "origin", "HEAD:master"
+          )
+
+          Write-Host "Changelog $number published successfully."
+          Write-Host "Product version: $version"
+          Write-Host "Original build: $env:BUILD_RUN_ID"
+          Write-Host "Changelog folder: $folder"
