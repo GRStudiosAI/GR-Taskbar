@@ -1,3 +1,4 @@
+#include "SettingsPaint.h"
 #pragma once
 #include <commdlg.h>
 #include "CursorModel.h"
@@ -22,12 +23,24 @@ static void GRCursorPanelLoadPreviews(HWND hwnd, GRCursorPanel* panel)
     SendMessageW(panel->roles, WM_SETREDRAW, FALSE, 0);
     SendMessageW(panel->roles, LB_RESETCONTENT, 0, 0);
     BOOL animated = FALSE;
+    GRCursorScheme defaultPreview={0};
+    GRCursorSystemScheme(L"Windows Aero",&defaultPreview);
     for (UINT i = 0; i < GR_CURSOR_ROLES; ++i) {
         GRCursorFreePreview(&panel->previews[i]);
         if (panel->current.paths[i][0]) GRCursorLoadPreview(panel->current.paths[i], &panel->previews[i]);
-        else {
-            panel->previews[i].cursor = LoadCursorW(NULL, MAKEINTRESOURCEW(defaults[i]));
-            panel->previews[i].shared = TRUE; panel->previews[i].steps = 1;
+        if(!panel->previews[i].cursor && defaultPreview.paths[i][0])
+            GRCursorLoadPreview(defaultPreview.paths[i],&panel->previews[i]);
+        if(!panel->previews[i].cursor) {
+            static const PCWSTR fallbackFiles[GR_CURSOR_ROLES]={L"aero_arrow.cur",L"aero_helpsel.cur",L"aero_working.ani",L"aero_busy.ani",L"cross_r.cur",L"beam_r.cur",L"aero_pen.cur",L"aero_unavail.cur",L"aero_ns.cur",L"aero_ew.cur",L"aero_nwse.cur",L"aero_nesw.cur",L"aero_move.cur",L"aero_up.cur",L"aero_link.cur",L"aero_pin.cur",L"aero_person.cur"};
+            WCHAR nativePath[MAX_PATH];
+            if(GetWindowsDirectoryW(nativePath,MAX_PATH)) {
+                wcscat_s(nativePath,MAX_PATH,L"\\Cursors\\");wcscat_s(nativePath,MAX_PATH,fallbackFiles[i]);
+                GRCursorLoadPreview(nativePath,&panel->previews[i]);
+            }
+        }
+        if(!panel->previews[i].cursor) {
+            panel->previews[i].cursor=LoadCursorW(NULL,MAKEINTRESOURCEW(defaults[i]));
+            panel->previews[i].shared=TRUE;panel->previews[i].steps=1;
         }
         panel->previews[i].next = GetTickCount64() + panel->previews[i].delay[0];
         animated |= panel->previews[i].steps > 1;
@@ -200,6 +213,9 @@ static LRESULT CALLBACK GRCursorPanelProc(HWND hwnd,UINT message,WPARAM wParam,L
     }
     if(message==WM_DRAWITEM){
         DRAWITEMSTRUCT* draw=(DRAWITEMSTRUCT*)lParam;if(draw->CtlID!=210||draw->itemID>=GR_CURSOR_ROLES)return 0;
+        DRAWITEMSTRUCT bufferedItem=*draw;draw=&bufferedItem;
+        GRSettingsPaint itemPaint;draw->hDC=GRSettingsPaintBegin(&itemPaint,draw->hDC,draw->rcItem);
+        int savedDC=SaveDC(draw->hDC);
         BOOL selected=(draw->itemState&ODS_SELECTED)!=0;
         HBRUSH brush=CreateSolidBrush(selected?(g_darkModeEnabled?RGB(37,61,83):RGB(211,231,247)):GRCursorBackground());
         FillRect(draw->hDC,&draw->rcItem,brush);DeleteObject(brush);SetBkMode(draw->hDC,TRANSPARENT);SetTextColor(draw->hDC,GRCursorText());
@@ -207,15 +223,17 @@ static LRESULT CALLBACK GRCursorPanelProc(HWND hwnd,UINT message,WPARAM wParam,L
         if(p->cursor)DrawIconEx(draw->hDC,draw->rcItem.left+pad,draw->rcItem.top+pad,(HICON)p->cursor,icon,icon,p->frame[p->step],NULL,DI_NORMAL);
         RECT text=draw->rcItem;text.left+=icon+3*pad;SelectObject(draw->hDC,panel->font);
         DrawTextW(draw->hDC,grCursorLabels[role],-1,&text,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS);
-        if(draw->itemState&ODS_FOCUS)DrawFocusRect(draw->hDC,&draw->rcItem);return TRUE;
+        if(draw->itemState&ODS_FOCUS)DrawFocusRect(draw->hDC,&draw->rcItem);RestoreDC(draw->hDC,savedDC);GRSettingsPaintEnd(&itemPaint);return TRUE;
     }
     if(message==WM_TIMER&&wParam==1){
         ULONGLONG now=GetTickCount64();BOOL changed=FALSE;
         for(UINT i=0;i<GR_CURSOR_ROLES;++i){GRCursorPreview* p=&panel->previews[i];
-            if(p->steps>1&&now>=p->next){p->step=(p->step+1)%p->steps;p->next=now+p->delay[p->step];changed=TRUE;}}
-        if(changed){InvalidateRect(panel->roles,NULL,FALSE);InvalidateRect(hwnd,NULL,FALSE);}return 0;
+            if(p->steps>1&&now>=p->next){p->step=(p->step+1)%p->steps;p->next=now+p->delay[p->step];changed=TRUE;
+                RECT item; if(SendMessageW(panel->roles,LB_GETITEMRECT,i,(LPARAM)&item)!=LB_ERR) InvalidateRect(panel->roles,&item,FALSE);}}
+        if(changed){RECT preview;GetClientRect(hwnd,&preview);preview.left=max(0,preview.right-MulDiv(156,panel->dpi,96));preview.top=MulDiv(42,panel->dpi,96);preview.bottom=preview.top+MulDiv(170,panel->dpi,96);InvalidateRect(hwnd,&preview,FALSE);}return 0;
     }
     if(message==WM_SHOWWINDOW){if(!wParam)KillTimer(hwnd,1);else for(UINT i=0;i<GR_CURSOR_ROLES;++i)if(panel->previews[i].steps>1){SetTimer(hwnd,1,16,NULL);break;}}
+    if(message==WM_ERASEBKGND)return 1;
     if(message==WM_PAINT){
         PAINTSTRUCT paint;HDC dc=BeginPaint(hwnd,&paint);RECT r;GetClientRect(hwnd,&r);FillRect(dc,&r,panel->background);
         LRESULT role=SendMessageW(panel->roles,LB_GETCURSEL,0,0);if(role>=0&&role<GR_CURSOR_ROLES){

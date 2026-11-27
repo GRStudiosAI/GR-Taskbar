@@ -75,8 +75,6 @@ Windows Registry Editor Version 5.00
 ;x 0 %R:1046%
 "TaskbarSmallIcons"=dword:00000000
 ;s Taskbar_AltImplSection IsAltImplTaskbar
-;y %R:1048%
-;https://grstudios.shop
 ;g Taskbar_AltImplSection
 
 ;T %R:1101%
@@ -570,34 +568,19 @@ Windows Registry Editor Version 5.00
 
 ;T %R:1801%
 [HKEY_CURRENT_USER\Software\GR-Taskbar]
-;z 3 %R:1802%
-;x 1 %R:1803%
-;x 0 %R:1804%
-;x 2 %R:1805%
-"UpdatePolicy"=dword:00000001
-;b %R:1806%
-"UpdatePreferStaging"=dword:00000000
-;b %R:1807%
-"UpdateAllowDowngrades"=dword:00000000
-;b %R:1817%
-"UpdateUseLocal"=dword:00000000
-;t %R:1808%
-;w %R:1809%
-;%R:1810%
-;github.com/GRStudiosAI/GR-Taskbar/releases/latest
-"UpdateURL"=""
-;w %R:1811%
-;%R:1812%
-;api.github.com/repos/GRStudiosAI/GR-Taskbar/releases?per_page=1
-"UpdateURLStaging"=""
-;y %R:1813%
+;t Update source: Official GR Taskbar releases
+;t Release channel: Stable
+;t Automatic updates: Enabled (checks at startup and every six hours)
+;t These update settings are fixed by GR Studios AI LLC.
+;t Custom sources, preview builds and downgrades are disabled.
+;t Installers must pass checksum, signing identity and Windows signature verification.
+;t %GR_UPDATE_STATUS%
+;y Check for updates now
 ;;;EP_CHECK_FOR_UPDATES
-;y %R:1814%
+;y Install update
 ;;;EP_INSTALL_UPDATES
-;y %R:1815% 🡕
-;https://grstudios.shop
-;y %R:1816% 🡕
-;https://grstudios.shop
+;y View official GR Taskbar releases
+;https://github.com/GRStudiosAI/GR-Taskbar/releases/latest
 
 
 ;T %R:1901%

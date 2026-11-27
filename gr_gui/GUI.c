@@ -869,8 +869,21 @@ static void GUI_SetSection(GUI* _this, BOOL bCheckEnablement, int dwSection)
     RegCloseKey(hKey);
 }
 
+static WCHAR grLastUpdateStatus[512];
+static void GRSettingsUpdateStatus(WCHAR* status, DWORD characters)
+{
+    DWORD bytes=characters*sizeof(WCHAR);
+    if(RegGetValueW(HKEY_CURRENT_USER,L"Software\\GR-Taskbar\\Updater",L"Status",RRF_RT_REG_SZ,NULL,status,&bytes)!=ERROR_SUCCESS)
+        wcscpy_s(status,characters,L"Automatic checks start when the updated taskbar loads.");
+}
+
 static void GUI_SubstituteLocalizedString(wchar_t* str, size_t cch)
 {
+    if(!wcsncmp(str,L"%GR_UPDATE_STATUS%",ARRAYSIZE(L"%GR_UPDATE_STATUS%")-1)) {
+        WCHAR status[512]; GRSettingsUpdateStatus(status,ARRAYSIZE(status));
+        swprintf_s(str,cch,L"Status: %s",status); return;
+    }
+
     // %R:1212%
     //    ^^^^ The resource ID
     wchar_t* pszSubstituteBegin = wcsstr(str, L"%R:");
@@ -991,6 +1004,15 @@ static void GUI_RemoveChoiceEntry(HMENU hMenu, UINT value)
 
 #include "ThemeManager.h"
 
+static void GRPlaceSettingsPanel(HWND panel, int x, int y, int width, int height)
+{
+    RECT current; GetWindowRect(panel, &current);
+    MapWindowPoints(NULL, GetParent(panel), (POINT*)&current, 2);
+    if (current.left != x || current.top != y || current.right-current.left != width || current.bottom-current.top != height)
+        SetWindowPos(panel, NULL, x, y, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
+    if (!(GetWindowLongPtrW(panel, GWL_STYLE) & WS_VISIBLE)) ShowWindow(panel, SW_SHOWNOACTIVATE);
+}
+
 static BOOL GUI_Build(HDC hDC, HWND hwnd, POINT pt)
 {
     GUI* _this;
@@ -1082,7 +1104,7 @@ static BOOL GUI_Build(HDC hDC, HWND hwnd, POINT pt)
 
     DTTOPTS DttOpts;
     DttOpts.dwSize = sizeof(DTTOPTS);
-    DttOpts.dwFlags = DTT_COMPOSITED | DTT_TEXTCOLOR;
+    DttOpts.dwFlags = DTT_TEXTCOLOR; // Opaque client painting respects the scroll viewport.
     //DttOpts.crText = GetSysColor(COLOR_WINDOWTEXT);
     DttOpts.crText = g_darkModeEnabled ? GUI_TEXTCOLOR_DARK : GUI_TEXTCOLOR;
     DWORD dwTextFlags = DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS;
@@ -3539,6 +3561,13 @@ static BOOL GUI_Build(HDC hDC, HWND hwnd, POINT pt)
         InvalidateRect(hwnd, NULL, FALSE);
     }
 
+    if (hBufferedPaint) {
+        BufferedPaintSetAlpha(hBufferedPaint,NULL,255);
+        // DWM owns the caption buttons. Do not cover them with our opaque buffer.
+        RECT caption={0};
+        if(SUCCEEDED(DwmGetWindowAttribute(hwnd,DWMWA_CAPTION_BUTTON_BOUNDS,&caption,sizeof(caption))) && caption.right>caption.left && caption.bottom>caption.top)
+            BufferedPaintClear(hBufferedPaint,&caption);
+    }
     EndBufferedPaint(hBufferedPaint, TRUE);
     return TRUE;
 }
@@ -3585,11 +3614,11 @@ LRESULT CALLBACK GUI_WndProc(GUI* pThis, HWND hWnd, UINT uMsg, WPARAM wParam, LP
                     MARGINS marGlassInset;
                     if (!IsHighContrast())
                     {
-                        // Extend the glass frame into the whole window
-                        marGlassInset.cxLeftWidth = -1;
-                        marGlassInset.cxRightWidth = -1;
-                        marGlassInset.cyBottomHeight = -1;
-                        marGlassInset.cyTopHeight = -1;
+                        // Opaque settings controls must not render onto a glass client surface.
+                        marGlassInset.cxLeftWidth = 0;
+                        marGlassInset.cxRightWidth = 0;
+                        marGlassInset.cyBottomHeight = 0;
+                        marGlassInset.cyTopHeight = MulDiv(32,GetDpiForWindow(hWnd),96);
                     }
                     else
                     {
@@ -3667,7 +3696,7 @@ LRESULT CALLBACK GUI_WndProc(GUI* pThis, HWND hWnd, UINT uMsg, WPARAM wParam, LP
         case WM_VSCROLL:
         {
             SCROLLINFO scroll = { sizeof(scroll), SIF_ALL };
-            GetScrollInfo(hWnd, SB_VERT, &scroll);
+            GetScrollInfo(pThis->contentScrollbar ? pThis->contentScrollbar : hWnd, pThis->contentScrollbar ? SB_CTL : SB_VERT, &scroll);
             int position = pThis->scrollOffset;
             int line = MulDiv(GUI_LINE_HEIGHT, pThis->dpi.y, 96);
             switch (LOWORD(wParam))
@@ -3701,11 +3730,11 @@ LRESULT CALLBACK GUI_WndProc(GUI* pThis, HWND hWnd, UINT uMsg, WPARAM wParam, LP
                         MARGINS marGlassInset;
                         if (!IsHighContrast())
                         {
-                            // Extend the glass frame into the whole window
-                            marGlassInset.cxLeftWidth = -1;
-                            marGlassInset.cxRightWidth = -1;
-                            marGlassInset.cyBottomHeight = -1;
-                            marGlassInset.cyTopHeight = -1;
+                            // Opaque settings controls must not render onto a glass client surface.
+                            marGlassInset.cxLeftWidth = 0;
+                            marGlassInset.cxRightWidth = 0;
+                            marGlassInset.cyBottomHeight = 0;
+                            marGlassInset.cyTopHeight = MulDiv(32,GetDpiForWindow(hWnd),96);
                         }
                         else
                         {
@@ -4090,14 +4119,23 @@ LRESULT CALLBACK GUI_WndProc(GUI* pThis, HWND hWnd, UINT uMsg, WPARAM wParam, LP
             POINT pt = { 0, 0 };
             GUI_Build(hDC, hWnd, pt);
 
-            SCROLLINFO scroll = { sizeof(scroll), SIF_RANGE | SIF_PAGE | SIF_POS };
+            SCROLLINFO scroll = { sizeof(scroll), SIF_RANGE | SIF_PAGE | SIF_POS | SIF_DISABLENOSCROLL };
             scroll.nMin = 0;
             scroll.nMax = max(0, pThis->contentHeight - 1);
             scroll.nPage = max(1, rc.bottom - MulDiv(112, pThis->dpi.y, 96));
             pThis->scrollOffset = max(0, min(max(0, scroll.nMax - (int)scroll.nPage + 1), pThis->scrollOffset));
             scroll.nPos = pThis->scrollOffset;
-            SetScrollInfo(hWnd, SB_VERT, &scroll, TRUE);
+            if(!pThis->contentScrollbar) pThis->contentScrollbar=CreateWindowExW(0,L"SCROLLBAR",L"Page scroll",WS_CHILD|SBS_VERT,0,0,0,0,hWnd,NULL,hModule,NULL);
+            if(pThis->contentScrollbar) {
+                SetScrollInfo(pThis->contentScrollbar,SB_CTL,&scroll,TRUE);
+                if(pThis->contentHeight>(int)scroll.nPage)
+                    GRPlaceSettingsPanel(pThis->contentScrollbar,rc.right-MulDiv(35,pThis->dpi.x,96),MulDiv(74,pThis->dpi.y,96),MulDiv(14,pThis->dpi.x,96),max(1,rc.bottom-MulDiv(128,pThis->dpi.y,96)));
+                else ShowWindow(pThis->contentScrollbar,SW_HIDE);
+            }
 
+            BOOL updatePage = pThis->section < ARRAYSIZE(pThis->sectionNames) &&
+                !_wcsicmp(pThis->sectionNames[pThis->section], L"Updates");
+            if(updatePage) SetTimer(hWnd,0x4752,1000,NULL); else KillTimer(hWnd,0x4752);
             BOOL iconPage = pThis->section < ARRAYSIZE(pThis->sectionNames) &&
                 (!_wcsicmp(pThis->sectionNames[pThis->section], L"Start icon") ||
                  !_wcsicmp(pThis->sectionNames[pThis->section], L"Start Icons"));
@@ -4108,9 +4146,8 @@ LRESULT CALLBACK GUI_WndProc(GUI* pThis, HWND hWnd, UINT uMsg, WPARAM wParam, LP
                 {
                     double dx = pThis->dpi.x / 96.0, dy = pThis->dpi.y / 96.0;
                     int left = (GUI_PADDING_LEFT + GUI_SIDEBAR_WIDTH + GUI_PADDING_RIGHT + 16) * dx;
-                    MoveWindow(pThis->iconPanel, left, 132 * dy, max(1, rc.right - left - 30 * dx),
-                        max(1, rc.bottom - (132 + 48) * dy), TRUE);
-                    ShowWindow(pThis->iconPanel, SW_SHOW);
+                    GRPlaceSettingsPanel(pThis->iconPanel, left, 132 * dy, max(1, rc.right - left - 30 * dx),
+                        max(1, rc.bottom - (132 + 48) * dy));
                 }
             }
             else if (pThis->iconPanel) ShowWindow(pThis->iconPanel, SW_HIDE);
@@ -4123,9 +4160,8 @@ LRESULT CALLBACK GUI_WndProc(GUI* pThis, HWND hWnd, UINT uMsg, WPARAM wParam, LP
                 if (pThis->cursorPanel) {
                     int left = MulDiv(GUI_PADDING_LEFT + GUI_SIDEBAR_WIDTH + GUI_PADDING_RIGHT + 16, pThis->dpi.x, 96);
                     int top = MulDiv(132, pThis->dpi.y, 96);
-                    MoveWindow(pThis->cursorPanel, left, top, max(1, rc.right-left-MulDiv(30,pThis->dpi.x,96)),
-                        max(1, rc.bottom-top-MulDiv(48,pThis->dpi.y,96)), TRUE);
-                    ShowWindow(pThis->cursorPanel, SW_SHOW);
+                    GRPlaceSettingsPanel(pThis->cursorPanel, left, top, max(1, rc.right-left-MulDiv(30,pThis->dpi.x,96)),
+                        max(1, rc.bottom-top-MulDiv(48,pThis->dpi.y,96)));
                 }
             }
             else if (pThis->cursorPanel) ShowWindow(pThis->cursorPanel, SW_HIDE);
@@ -4155,6 +4191,15 @@ LRESULT CALLBACK GUI_WndProc(GUI* pThis, HWND hWnd, UINT uMsg, WPARAM wParam, LP
         {
             switch (wParam)
             {
+                case 0x4752:
+                {
+                    WCHAR status[512]; GRSettingsUpdateStatus(status,ARRAYSIZE(status));
+                    if(wcscmp(status,grLastUpdateStatus)) {
+                        wcscpy_s(grLastUpdateStatus,ARRAYSIZE(grLastUpdateStatus),status);
+                        InvalidateRect(hWnd,NULL,FALSE);
+                    }
+                    break;
+                }
                 case GUI_TIMER_READ_HELP:
                 {
                     PlayHelpMessage(pThis);

@@ -86,6 +86,7 @@ typedef struct _GUI
 	HWND hAccLabel;
 	HWND iconPanel;
 	HWND cursorPanel;
+	HWND contentScrollbar;
 	int scrollOffset;
 	int contentHeight;
 	SIZE_T scrollSection;

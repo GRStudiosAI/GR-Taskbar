@@ -19,7 +19,7 @@ extern HMODULE hModule;
 #define UPDATE_POLICY_AUTO 0
 #define UPDATE_POLICY_NOTIFY 1
 #define UPDATE_POLICY_MANUAL 2
-#define UPDATE_POLICY_DEFAULT UPDATE_POLICY_NOTIFY
+#define UPDATE_POLICY_DEFAULT UPDATE_POLICY_AUTO
 
 #define UPDATES_OP_DEFAULT 0
 #define UPDATES_OP_CHECK 1
@@ -27,11 +27,6 @@ extern HMODULE hModule;
 #define UPDATES_OP_INSTALL_NO_CONFIRM 3
 
 #define UPDATES_USER_AGENT "GR Taskbar"
-// Migration safeguard: enable only after GR release downloads/signature checks
-// have passed end-to-end testing. Saved update preferences are left untouched.
-#ifndef GR_UPDATER_VERIFIED
-#define GR_UPDATER_VERIFIED 0
-#endif
 #define UPDATES_FORM_HEADERS "Content-Type: text/plain;\r\n"
 #define UPDATES_HASH_SIZE 32
 #define UPDATES_BUFSIZ 10240

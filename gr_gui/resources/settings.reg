@@ -95,8 +95,6 @@ Windows Registry Editor Version 5.00
 "TaskbarSmallIcons"=dword:00000000
 ;g Taskbar_Windows10Section
 ;s Taskbar_AltImplSection IsAltImplTaskbar
-;y %R:1048%
-;https://grstudios.shop
 ;g Taskbar_AltImplSection
 
 
@@ -338,8 +336,6 @@ Windows Registry Editor Version 5.00
 ;x 3 %R:1338%
 ;x 1 %R:1339%
 ;"Virtualized_{D17F1E1A-5919-4427-8F89-A1A8503CA3EB}_NoStartMenuMorePrograms"=dword:00000000
-;y %R:1340%
-;https://grstudios.shop
 ;g StartMenu_Windows10
 
 
@@ -749,10 +745,15 @@ Windows Registry Editor Version 5.00
 [HKEY_CURRENT_USER\Software\GR-Taskbar]
 ;t Update source: Official GR Taskbar releases
 ;t Release channel: Stable
-;t Update policy: Notify before installation
+;t Automatic updates: Enabled (checks at startup and every six hours)
 ;t These update settings are fixed by GR Studios AI LLC.
 ;t Custom sources, preview builds and downgrades are disabled.
-;t Automatic updates are paused pending release verification.
+;t Installers must pass checksum, signing identity and Windows signature verification.
+;t %GR_UPDATE_STATUS%
+;y Check for updates now
+;;;EP_CHECK_FOR_UPDATES
+;y Install update
+;;;EP_INSTALL_UPDATES
 ;y View official GR Taskbar releases
 ;https://github.com/GRStudiosAI/GR-Taskbar/releases/latest
 

@@ -1,3 +1,4 @@
+#include "SettingsPaint.h"
 #pragma once
 #include <commctrl.h>
 #include <knownfolders.h>
@@ -475,7 +476,10 @@ static LRESULT CALLBACK OrbGalleryWindowProc(HWND hwnd, UINT message, WPARAM wPa
         return TRUE;
     case WM_DRAWITEM:
     {
-        DRAWITEMSTRUCT* draw = (DRAWITEMSTRUCT*)lParam;
+        int savedDC = SaveDC(((DRAWITEMSTRUCT*)lParam)->hDC);
+        DRAWITEMSTRUCT bufferedItem = *(DRAWITEMSTRUCT*)lParam;
+        DRAWITEMSTRUCT* draw = &bufferedItem;
+        GRSettingsPaint itemPaint; draw->hDC = GRSettingsPaintBegin(&itemPaint, draw->hDC, draw->rcItem);
         if (draw->CtlType == ODT_BUTTON)
         {
             COLORREF color = draw->CtlID == IDOK ? RGB(30, 114, 168) : (gallery->dark ? RGB(46, 59, 77) : RGB(224, 234, 247));
@@ -490,33 +494,33 @@ static LRESULT CALLBACK OrbGalleryWindowProc(HWND hwnd, UINT message, WPARAM wPa
             WCHAR label[80]; GetWindowTextW(draw->hwndItem, label, ARRAYSIZE(label));
             DrawTextW(draw->hDC, label, -1, &draw->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
             if (draw->itemState & ODS_FOCUS) { RECT focus = draw->rcItem; InflateRect(&focus, -4, -4); DrawFocusRect(draw->hDC, &focus); }
-            return TRUE;
+            GRSettingsPaintEnd(&itemPaint); RestoreDC(itemPaint.target, savedDC); return TRUE;
         }
         if (draw->CtlID == 102)
         {
             FillRect(draw->hDC, &draw->rcItem, gallery->background);
             LRESULT index = SendMessageW(gallery->list, LB_GETCURSEL, 0, 0);
-            if (index == LB_ERR) return TRUE;
+            if (index == LB_ERR) { GRSettingsPaintEnd(&itemPaint); RestoreDC(itemPaint.target, savedDC); return TRUE; }
             OrbGalleryItem* selected = (OrbGalleryItem*)SendMessageW(gallery->list, LB_GETITEMDATA, index, 0);
-            if (!selected || selected == (void*)LB_ERR) return TRUE;
+            if (!selected || selected == (void*)LB_ERR) { GRSettingsPaintEnd(&itemPaint); RestoreDC(itemPaint.target, savedDC); return TRUE; }
             if (gallery->activeItem != selected)
             {
                 OrbGalleryClearActive(gallery);
                 gallery->activeItem = selected;
                 if (!(selected->style == ORB_STYLE_CUSTOM ?
                     LoadCustomOrbImage(selected->path, &gallery->activeImage) :
-                    CreateBuiltinOrbImage(selected->style, &gallery->activeImage))) return TRUE;
+                    CreateBuiltinOrbImage(selected->style, &gallery->activeImage))) { GRSettingsPaintEnd(&itemPaint); RestoreDC(itemPaint.target, savedDC); return TRUE; }
             }
-            if (!gallery->activeImage.bitmap) return TRUE;
+            if (!gallery->activeImage.bitmap) { GRSettingsPaintEnd(&itemPaint); RestoreDC(itemPaint.target, savedDC); return TRUE; }
             UINT dpi = GetDpiForWindow(hwnd); if (!dpi) dpi = 96;
             int buttonWidth = MulDiv(48, (int)dpi, 96), buttonHeight = MulDiv(40, (int)dpi, 96);
             RECT button = { (draw->rcItem.right - buttonWidth) / 2, (draw->rcItem.bottom - buttonHeight) / 2, 0, 0 };
             button.right = button.left + buttonWidth; button.bottom = button.top + buttonHeight;
             RECT target = GRStartIconLayout(button, gallery->activeImage.contentBounds, dpi, GRReadStartIconSizing());
             GRDrawOrbFrame(draw->hDC, &gallery->activeImage, &gallery->activeCache, target, (int)gallery->previewState);
-            return TRUE;
+            GRSettingsPaintEnd(&itemPaint); RestoreDC(itemPaint.target, savedDC); return TRUE;
         }
-        if (draw->itemID == (UINT)-1) return TRUE;
+        if (draw->itemID == (UINT)-1) { GRSettingsPaintEnd(&itemPaint); RestoreDC(itemPaint.target, savedDC); return TRUE; }
         OrbGalleryItem* item = (OrbGalleryItem*)draw->itemData;
         BOOL selected = (draw->itemState & ODS_SELECTED) != 0;
         HBRUSH selection = CreateSolidBrush(gallery->dark ? RGB(37, 61, 83) : RGB(211, 231, 247));
@@ -559,7 +563,7 @@ static LRESULT CALLBACK OrbGalleryWindowProc(HWND hwnd, UINT message, WPARAM wPa
         SetTextColor(draw->hDC, gallery->dark ? RGB(224, 234, 248) : RGB(29, 44, 66));
         DrawTextW(draw->hDC, name, -1, &text, DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX);
         if (draw->itemState & ODS_FOCUS) DrawFocusRect(draw->hDC, &draw->rcItem);
-        return TRUE;
+        GRSettingsPaintEnd(&itemPaint); RestoreDC(itemPaint.target, savedDC); return TRUE;
     }
     case WM_DELETEITEM:
     {
