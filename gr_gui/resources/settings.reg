@@ -344,10 +344,15 @@ Windows Registry Editor Version 5.00
 
 
 
-;T Start icon
+;T Start Icons
 [HKEY_CURRENT_USER\Software\GR-Taskbar]
 ;t Choose the button you want. Your menu and taskbar styles stay independent.
 ;t Add a square PNG, BMP, ICO or JPG, or a three-frame orb strip.
+
+;T Mouse Cursors
+[HKEY_CURRENT_USER\Software\GR-Taskbar]
+;t Preview, import and save static or animated cursor schemes.
+;t Apply immediately, restore previous cursors, or restore Windows defaults.
 
 ;T Themes
 [HKEY_CURRENT_USER\Software\GR-Taskbar]

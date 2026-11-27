@@ -579,7 +579,7 @@ typedef enum LanguageCodeTreatment
 } LanguageCodeTreatment;
 
 // Service only artwork entries owned by the embedded payload.
-static BOOL GRServiceOrbs(unzFile zip, BOOL install)
+static BOOL GRServiceAssets(unzFile zip, BOOL install, const char* prefix)
 {
     if (!zip) return GRFail(L"load orb payload", grInstallRoot, ERROR_INVALID_DATA);
     int result = unzGoToFirstFile(zip);
@@ -588,13 +588,16 @@ static BOOL GRServiceOrbs(unzFile zip, BOOL install)
         if (unzGetCurrentFileInfo64(zip, &info, name, sizeof(name), NULL, 0, NULL, 0) != UNZ_OK || info.size_filename >= sizeof(name))
             return GRFail(L"read orb archive entry", grInstallRoot, ERROR_INVALID_DATA);
         name[info.size_filename] = 0;
-        if (strncmp(name, "Orbs/", 5) || !info.uncompressed_size) continue;
+        if (strncmp(name, prefix, strlen(prefix)) || !info.uncompressed_size) continue;
         WCHAR relative[MAX_PATH], path[MAX_PATH];
         if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, name, -1, relative, MAX_PATH))
             return GRFail(L"decode orb path", grInstallRoot, GetLastError());
         for (WCHAR* c = relative; *c; ++c) if (*c == L'/') *c = L'\\';
         PCWSTR ext = PathFindExtensionW(relative);
-        if (_wcsicmp(ext,L".bmp") && _wcsicmp(ext,L".png")) continue;
+        if (!strcmp(prefix,"Cursors/")) {
+            if (_wcsicmp(ext,L".cur") && _wcsicmp(ext,L".ani") && _wcsicmp(ext,L".grcursors")) continue;
+        } else if (_wcsicmp(ext,L".bmp") && _wcsicmp(ext,L".png") && _wcsicmp(ext,L".ico") &&
+            _wcsicmp(ext,L".jpg") && _wcsicmp(ext,L".jpeg")) continue;
         if (swprintf_s(path, MAX_PATH, L"%s\\%s", grInstallRoot, relative) < 0 || !GRValidateTarget(path))
             return GRFail(L"validate orb path", grInstallRoot, ERROR_INVALID_NAME);
         if (!install) { if (!GRPublishFile(path, NULL, TRUE)) return FALSE; continue; }
@@ -1068,7 +1071,8 @@ int WINAPI wWinMain(
         if (bOk) bOk = GRBeginFiles();
         if (bOk && grStoppedShell) bOk = GRRestartShell(userToken);
         // Artwork is serviced while the desktop is available; only binaries need a shell stop.
-        if (bOk) bOk = GRServiceOrbs(zipFile, bInstall);
+        if (bOk) bOk = GRServiceAssets(zipFile, bInstall, "Orbs/");
+        if (bOk) bOk = GRServiceAssets(zipFile, bInstall, "Cursors/");
         if (bOk) GRCloseSettings();
         if (bOk) bOk = GRStopExplorer(FindWindowW(L"Shell_TrayWnd", NULL));
 

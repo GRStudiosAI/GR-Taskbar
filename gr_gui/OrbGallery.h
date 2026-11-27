@@ -146,6 +146,7 @@ static void OrbGalleryPopulate(OrbGallery* gallery)
     OrbGalleryAdd(gallery, 1, NULL, L"Windows 11");
     OrbGalleryAdd(gallery, ORB_STYLE_WINDOWS7, NULL, L"Windows 7");
     OrbGalleryAdd(gallery, ORB_STYLE_WINDOWSXP, NULL, L"Windows XP");
+    OrbGalleryAdd(gallery, ORB_STYLE_TRANSPARENT, NULL, L"Transparent (no icon)");
     BOOL found = FALSE;
     WCHAR installed[MAX_PATH];
     if (OrbGalleryInstalledDirectory(installed)) OrbGalleryScan(gallery, installed, L"", &found, 0);

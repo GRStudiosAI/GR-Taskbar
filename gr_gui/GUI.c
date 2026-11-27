@@ -15,6 +15,7 @@ DWORD dwTaskbarPosition = 3;
 DWORD GUI_TaskbarStyle = -1;
 
 #include "OrbGallery.h"
+#include "CursorSettings.h"
 
 LSTATUS SetPolicy(HKEY hKey, LPCWSTR wszPolicyPath, LPCWSTR wszPolicyName, DWORD dwVal)
 {
@@ -4097,7 +4098,8 @@ LRESULT CALLBACK GUI_WndProc(GUI* pThis, HWND hWnd, UINT uMsg, WPARAM wParam, LP
             SetScrollInfo(hWnd, SB_VERT, &scroll, TRUE);
 
             BOOL iconPage = pThis->section < ARRAYSIZE(pThis->sectionNames) &&
-                !wcscmp(pThis->sectionNames[pThis->section], L"Start icon");
+                (!_wcsicmp(pThis->sectionNames[pThis->section], L"Start icon") ||
+                 !_wcsicmp(pThis->sectionNames[pThis->section], L"Start Icons"));
             if (iconPage)
             {
                 if (!pThis->iconPanel) pThis->iconPanel = CreateEmbeddedIconGallery(hWnd);
@@ -4111,6 +4113,21 @@ LRESULT CALLBACK GUI_WndProc(GUI* pThis, HWND hWnd, UINT uMsg, WPARAM wParam, LP
                 }
             }
             else if (pThis->iconPanel) ShowWindow(pThis->iconPanel, SW_HIDE);
+
+            BOOL cursorPage = pThis->section < ARRAYSIZE(pThis->sectionNames) &&
+                !_wcsicmp(pThis->sectionNames[pThis->section], L"Mouse Cursors");
+            if (cursorPage)
+            {
+                if (!pThis->cursorPanel) pThis->cursorPanel = CreateEmbeddedCursorSettings(hWnd);
+                if (pThis->cursorPanel) {
+                    int left = MulDiv(GUI_PADDING_LEFT + GUI_SIDEBAR_WIDTH + GUI_PADDING_RIGHT + 16, pThis->dpi.x, 96);
+                    int top = MulDiv(132, pThis->dpi.y, 96);
+                    MoveWindow(pThis->cursorPanel, left, top, max(1, rc.right-left-MulDiv(30,pThis->dpi.x,96)),
+                        max(1, rc.bottom-top-MulDiv(48,pThis->dpi.y,96)), TRUE);
+                    ShowWindow(pThis->cursorPanel, SW_SHOW);
+                }
+            }
+            else if (pThis->cursorPanel) ShowWindow(pThis->cursorPanel, SW_HIDE);
 
             EndPaint(hWnd, &ps);
             return 0;

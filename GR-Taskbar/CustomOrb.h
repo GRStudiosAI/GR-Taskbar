@@ -5,6 +5,7 @@
 #pragma comment(lib, "windowscodecs.lib")
 
 #define ORB_STYLE_CUSTOM 3
+#define ORB_STYLE_TRANSPARENT 2
 #define ORB_STYLE_WINDOWS7 4
 #define ORB_STYLE_WINDOWSXP 5
 #define CUSTOM_ORB_IMAGE_VALUE L"CustomOrbImage"
@@ -111,6 +112,11 @@ static BOOL CreateBuiltinOrbImage(DWORD style, CustomOrbImage* image)
     image->width = 256;
     image->frameHeight = 256;
     image->sourceWidth = 256; image->sourceHeight = 768; image->sourceFrames = 3;
+    if (style == ORB_STYLE_TRANSPARENT) {
+        ZeroMemory(pixels, 256 * 768 * sizeof(DWORD));
+        image->contentBounds = (RECT){ 0, 0, 256, 256 };
+        return TRUE;
+    }
     return GRMeasureOrbContent(image);
 }
 

@@ -99,6 +99,8 @@ int main(void)
     CHECK(GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS) == gdiBefore);
     printf("1000 state paints: %llu ms, no GDI resource growth\n", GetTickCount64() - started);
     dwOrbStyle = ORB_STYLE_TRANSPARENT;
+    SendMessageW(hwnd, WM_PRINTCLIENT, (WPARAM)dc, PRF_CLIENT); CHECK(nativePaints == 0);
+    dwOrbStyle = 99;
     SendMessageW(hwnd, WM_PRINTCLIENT, (WPARAM)dc, PRF_CLIENT); CHECK(nativePaints == 1);
     for (UINT dpi = 96; dpi <= 192; dpi += 24) {
         RECT button = { 0, 0, MulDiv(40, dpi, 96), MulDiv(40, dpi, 96) };

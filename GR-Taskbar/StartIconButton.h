@@ -10,9 +10,9 @@ static BOOL GRHasCustomStartArtwork(void)
     AcquireSRWLockShared(&customOrbLock);
     BOOL available = customOrb.bitmap != NULL;
     ReleaseSRWLockShared(&customOrbLock);
-    return bOldTaskbar && available && (dwOrbStyle == ORB_STYLE_CUSTOM ||
+    return bOldTaskbar && (dwOrbStyle == ORB_STYLE_TRANSPARENT || (available && (dwOrbStyle == ORB_STYLE_CUSTOM ||
         dwOrbStyle == ORB_STYLE_WINDOWS10 || dwOrbStyle == ORB_STYLE_WINDOWS11 ||
-        dwOrbStyle == ORB_STYLE_WINDOWS7 || dwOrbStyle == ORB_STYLE_WINDOWSXP);
+        dwOrbStyle == ORB_STYLE_WINDOWS7 || dwOrbStyle == ORB_STYLE_WINDOWSXP)));
 }
 
 static int GRNativeStartVisualState(HWND hwnd)
@@ -49,6 +49,7 @@ static BOOL GRPaintStartArtwork(HWND hwnd, HDC dc)
     // Paint the taskbar surface, never the native Start button highlight.
     HRESULT background = DrawThemeParentBackground(hwnd, dc, &client);
     if (FAILED(background)) FillRect(dc, &client, GetSysColorBrush(COLOR_3DFACE));
+    if (dwOrbStyle == ORB_STYLE_TRANSPARENT) { RestoreDC(dc, saved); return TRUE; }
     OrbInfo orb = { NULL, hwnd, FALSE, GetDpiForWindow(hwnd) };
     int state = GRNativeStartVisualState(hwnd);
     BOOL drawn = DrawCustomOrb(dc, &client, &client, 0, state, &orb);

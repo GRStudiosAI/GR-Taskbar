@@ -85,11 +85,12 @@ typedef struct _GUI
 	void* pAccPropServices;
 	HWND hAccLabel;
 	HWND iconPanel;
+	HWND cursorPanel;
 	int scrollOffset;
 	int contentHeight;
 	SIZE_T scrollSection;
 	BOOL bShouldAnnounceSelected;
-	WCHAR sectionNames[20][64];
+	WCHAR sectionNames[32][64];
 	BOOL bRebuildIfTabOrderIsEmpty;
 	int dwPageLocation;
 	DWORD last_section;

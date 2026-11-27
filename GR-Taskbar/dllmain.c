@@ -210,6 +210,9 @@ DWORD S_Icon_Dark_Widgets = 0;
 BOOL g_bIsDesktopRaised = FALSE;
 
 #include "utility.h"
+#if WITH_MAIN_PATCHER
+#include "LegacyRegistryBridge.h"
+#endif
 #include "Localization.h"
 #include "resource.h"
 #include "../gr_gui/resources/GRSharedResources.h"
@@ -5675,6 +5678,9 @@ DWORD WindowSwitcher(DWORD unused)
 void WINAPI LoadSettings(LPARAM lParam)
 {
     BOOL bIsExplorer = LOWORD(lParam);
+#if WITH_MAIN_PATCHER
+    if (bIsExplorer) GRMigrateProductSettings(FALSE);
+#endif
     BOOL bIsRefreshAllowed = HIWORD(lParam);
     DWORD dwRefreshUIMask = REFRESHUI_NONE;
 
@@ -11840,6 +11846,9 @@ DWORD Inject(BOOL bIsExplorer)
         }
 
         // The alternate Windows 10 taskbar owns its own theme imports.
+        // Its product-specific configuration now resolves to the GR namespace,
+        // including handles it cached before the import redirections were set.
+        if (GRPatchBackendRegistry(hMyTaskbar)) GRMigrateProductSettings(TRUE);
         // Hooking only explorer.exe leaves its actual Start button unchanged.
         VnPatchIAT(hMyTaskbar, "uxtheme.dll", "OpenThemeDataForDpi", explorer_OpenThemeDataForDpi);
         VnPatchIAT(hMyTaskbar, "uxtheme.dll", "OpenThemeData", explorer_OpenThemeData);

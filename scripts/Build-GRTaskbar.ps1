@@ -72,6 +72,7 @@ function Invoke-GRBuild {
 $arch = if ($Platform -eq 'amd64') { 'x64' } else { 'ARM64' }
 $output = Join-Path $root "build\$Configuration\$arch"
 $payload = Join-Path $output 'gr_setup_files'
+$hostPatcher = Join-Path $root "build\$Configuration\x64\GR-Taskbar-SetupPatch.exe"
 if (-not $SkipCompile) {
     # Check the absolute resolved cache location before removing generated staging.
     if (Test-Path -LiteralPath $payload) {
@@ -87,10 +88,18 @@ if (-not $SkipCompile) {
         ('call BuildDependencies{0}.bat' -f $Configuration),
         ('"{0}" GR-Taskbar.sln /m /p:Configuration={1} /p:Platform=IA-32 /v:minimal' -f $msbuild,$Configuration),
         ('"{0}" gr_starttiledata\gr_starttiledata.vcxproj /m /p:Configuration={1} /p:Platform={2} "/p:SolutionDir={3}/" /v:minimal' -f $msbuild,$Configuration,$arch,$root.Replace('\','/')),
-        ('"{0}" GR-Taskbar.sln /m /p:Configuration={1} /p:Platform={2} /v:minimal' -f $msbuild,$Configuration,$Platform)
+        ('"{0}" GR-Taskbar.sln /m /p:Configuration={1} /p:Platform={2} {3} /v:minimal' -f $msbuild,$Configuration,$Platform,$(if ($Platform -eq 'arm64') { '/p:WithArm64XBinaries=true' } else { '' }))
     )
 }
 if (-not (Test-Path -LiteralPath $payload)) { throw 'Compiled payload staging is missing.' }
+if ($Platform -eq 'arm64' -and (-not $SkipCompile -or -not (Test-Path -LiteralPath $hostPatcher))) {
+    # This utility edits PE data; it must run on the x64 runner, even when its
+    # input installer is ARM64. It has no target-project references to rebuild.
+    Invoke-GRBuild -Label host-tools -Commands @(
+        ('"{0}" gr_setup_patch\gr_setup_patch.vcxproj /p:Configuration={1} /p:Platform=x64 /p:BuildProjectReferences=false "/p:SolutionDir={2}/" /v:minimal' -f $msbuild,$Configuration,$root.Replace('\','/'))
+    )
+}
+if (-not (Test-Path -LiteralPath $hostPatcher)) { throw 'The x64 installer metadata utility is missing.' }
 
 $script:checks = @()
 function Sign-GRFile([string]$Path) {
@@ -119,6 +128,7 @@ foreach ($name in $names) {
         if (Test-Path -LiteralPath $member) { Copy-Item -LiteralPath $file -Destination $member -Force }
     }
 }
+if ($Platform -eq 'arm64') { Sign-GRFile $hostPatcher }
 $x86 = Join-Path $root "build\$Configuration\Win32\GR-Taskbar.IA-32.dll"
 if (-not (Test-Path -LiteralPath $x86)) { throw 'The IA-32 helper is missing.' }
 Sign-GRFile $x86
@@ -147,8 +157,8 @@ Invoke-GRBuild -Label package -Commands @(
 if ((Test-FileCatalog -Path $payload -CatalogFilePath $catalog -FilesToSkip 'GR-Taskbar.cat').ToString() -ne 'Valid') { throw 'Packaged payload differs from its signed catalog.' }
 $installer = Join-Path $output 'GR-Taskbar-Setup.exe'
 $main = Join-Path $output $(if ($Platform -eq 'amd64') { 'GR-Taskbar.amd64.dll' } else { 'GR-Taskbar.arm64.dll' })
-& (Join-Path $output 'GR-Taskbar-SetupPatch.exe') $main $installer
-if ($LASTEXITCODE -ne 0) { throw 'Installer update identity stamping failed.' }
+$stamp = Start-Process -FilePath $hostPatcher -ArgumentList @(('"' + $main + '"'),('"' + $installer + '"')) -Wait -PassThru
+if ($stamp.ExitCode -ne 0) { throw "Installer update identity stamping failed (exit $($stamp.ExitCode))." }
 Sign-GRFile $installer
 if (-not [GRBuildVerification]::IconMatches($installer,(Join-Path $root 'gr_gui\resources\gr-taskbar.ico'))) { throw 'Installer icon resources do not match the approved project ICO.' }
 
