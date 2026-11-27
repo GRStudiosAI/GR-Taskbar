@@ -357,6 +357,230 @@ jobs:
           Get-ChildItem release -File |
               Select-Object Name, Length
 
+      - name: Generate complete official release description
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          BUILD_SHA: ${{ steps.build.outputs.sha }}
+          BUILD_RUN_ID: ${{ steps.build.outputs.run_id }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $version = $env:RELEASE_TAG.Substring(1)
+          $date = (Get-Date).ToUniversalTime().ToString("MMMM dd, yyyy")
+          $repository = "https://github.com/$env:GITHUB_REPOSITORY"
+          $shortSha = $env:BUILD_SHA.Substring(0, 12)
+
+          # Retrieve the actual GitHub-generated release changes.
+          $generated = gh api --method POST `
+              "repos/$env:GITHUB_REPOSITORY/releases/generate-notes" `
+              -f "tag_name=$env:RELEASE_TAG" `
+              -f "target_commitish=$env:BUILD_SHA"
+
+          $generatedExitCode = $LASTEXITCODE
+          $changes = ""
+
+          if ($generatedExitCode -eq 0) {
+              $generatedNotes = $generated | ConvertFrom-Json
+              $changes = $generatedNotes.body
+          }
+
+          # Retrieve source commit history when generated notes
+          # are unavailable or contain no useful change details.
+          if ([string]::IsNullOrWhiteSpace($changes)) {
+              Write-Host "Retrieving source commit history."
+
+              $history = gh api `
+                  "repos/$env:GITHUB_REPOSITORY/commits?sha=$env:BUILD_SHA&per_page=30"
+
+              if ($LASTEXITCODE -eq 0) {
+                  $commits = $history | ConvertFrom-Json
+
+                  $changes = (
+                      $commits | ForEach-Object {
+                          $message = ($_.commit.message -split "\r?\n")[0]
+                          $commitSha = $_.sha.Substring(0, 7)
+                          "- $message ([$commitSha]($repository/commit/$($_.sha)))"
+                      }
+                  ) -join "`n"
+              }
+          }
+
+          if ([string]::IsNullOrWhiteSpace($changes)) {
+              $changes = "Detailed change history is available in the linked source commit."
+          }
+
+          $notes = @"
+          # GR Taskbar $version
+
+          Official public release of GR Taskbar by GR Studios AI LLC.
+
+          ## Release Information
+
+          | Property | Details |
+          | --- | --- |
+          | Product | GR Taskbar |
+          | Version | $version |
+          | Release Date | $date (UTC) |
+          | Developer | GR Studios AI LLC |
+          | Release Channel | Official |
+          | Architectures | AMD64 (x64) and ARM64 |
+          | Signing Mode | Self-signed code signing |
+          | Build Run | [$env:BUILD_RUN_ID]($repository/actions/runs/$env:BUILD_RUN_ID) |
+          | Source Commit | [$shortSha]($repository/commit/$env:BUILD_SHA) |
+
+          ## About GR Taskbar
+
+          GR Taskbar is a Windows desktop customization project developed by GR Studios AI LLC.
+
+          The project is designed to provide greater control over the Windows taskbar, Start menu, desktop appearance, and personalization experience.
+
+          GR Taskbar incorporates open-source foundations from ExplorerPatcher while maintaining its own branding, development direction, customization features, and release infrastructure.
+
+          ## What's New
+
+          The following changes are generated from the repository's development history.
+
+          $changes
+
+          ## Project Features
+
+          GR Taskbar focuses on the following areas of Windows customization:
+
+          - Taskbar personalization.
+          - Start menu customization.
+          - Custom Start button icons.
+          - Desktop appearance customization.
+          - Mouse cursor personalization.
+          - Classic Windows-inspired appearance options.
+          - Dedicated GR Settings interface.
+          - Installer servicing and maintenance.
+          - Windows desktop integration.
+
+          Feature availability may depend on the Windows version and configuration.
+
+          ## Available Downloads
+
+          | File | Description |
+          | --- | --- |
+          | GR-Taskbar-Setup.exe | AMD64 / x64 Windows installer |
+          | GR-Taskbar-Setup-ARM64.exe | ARM64 Windows installer |
+          | GR-Taskbar-Public.cer | Public code-signing certificate |
+          | GR-Taskbar-amd64.cat | AMD64 security catalog |
+          | GR-Taskbar-arm64.cat | ARM64 security catalog |
+          | GR-Taskbar-SIGNING-REPORT-amd64.json | AMD64 signing verification report |
+          | GR-Taskbar-SIGNING-REPORT-arm64.json | ARM64 signing verification report |
+          | SHA256SUMS.txt | SHA-256 release file checksums |
+
+          ## Installation
+
+          1. Check your Windows system architecture.
+          2. Download the appropriate installer from the Assets section.
+          3. Verify the installer checksum and signing information.
+          4. Close unnecessary applications and save your work.
+          5. Run the appropriate installer.
+          6. Follow the installation instructions.
+          7. Restart Windows if required by the installer.
+
+          Most Intel and AMD desktop computers use the AMD64 installer.
+
+          Windows computers using ARM processors require the ARM64 installer.
+
+          ## Digital Signatures and Security
+
+          Both installation packages have been verified against the original build's signing certificate.
+
+          Release verification includes:
+
+          - Installer signature verification.
+          - Security catalog signature verification.
+          - Certificate thumbprint verification.
+          - Timestamp verification.
+          - SHA-256 artifact integrity verification.
+          - Installer product version verification.
+          - Original build source commit verification.
+          - Validation of build-time tamper detection reports.
+          - Validation of build-time payload catalog reports.
+
+          The installers use a self-signed code-signing certificate issued by GR Studios AI LLC.
+
+          Windows may display an untrusted publisher or SmartScreen warning because the certificate is not automatically trusted by Windows.
+
+          Users should verify the publisher, certificate, and SHA-256 checksums before installing. Do not disable Windows security protections to install software.
+
+          ## Release Integrity
+
+          This release was published using previously completed and verified GitHub build artifacts.
+
+          The release workflow does not rebuild, modify, or re-sign the original installers.
+
+          The SHA256SUMS.txt file contains SHA-256 checksums for the published release assets.
+
+          ## Build and Verification Status
+
+          | Verification | Result |
+          | --- | --- |
+          | Original build | Successful |
+          | AMD64 artifacts | Verified |
+          | ARM64 artifacts | Verified |
+          | Installer signatures | Verified |
+          | Catalog signatures | Verified |
+          | Certificate identity | Verified |
+          | Artifact checksums | Verified |
+          | Product versions | Verified |
+          | Build-time tamper detection | Passed |
+          | Build-time payload catalog validation | Passed |
+
+          ## Compatibility and Known Issues
+
+          Windows customization behavior may vary between Windows versions, system configurations, and installed updates.
+
+          Review the project documentation and issue tracker for current compatibility information and known issues.
+
+          ## Support and Documentation
+
+          - [Official GR Taskbar repository]($repository)
+          - [Project documentation]($repository/wiki)
+          - [Report a bug]($repository/issues)
+          - [Community discussions]($repository/discussions)
+          - [Release history]($repository/releases)
+          - [Source code]($repository/tree/$env:BUILD_SHA)
+          - [Original GitHub build]($repository/actions/runs/$env:BUILD_RUN_ID)
+
+          ## Licensing and Acknowledgments
+
+          GR Taskbar incorporates open-source work from ExplorerPatcher and its contributors.
+
+          Applicable upstream licenses, copyright notices, and acknowledgments remain part of the project.
+
+          Refer to the repository's licensing documentation for applicable terms.
+
+          ---
+
+          **GR Studios AI LLC**
+
+          *Where Imagination Meets Intelligence.*
+
+          Official GR Taskbar Release $version
+          "@
+
+          $notes | Set-Content `
+              -LiteralPath RELEASE_NOTES.md `
+              -Encoding utf8
+
+          if (-not (Test-Path -LiteralPath RELEASE_NOTES.md)) {
+              throw "Release description generation failed."
+          }
+
+          if ((Get-Item RELEASE_NOTES.md).Length -eq 0) {
+              throw "Generated release description is empty."
+          }
+
+          Write-Host "Complete release description generated successfully."
+
+          Get-Content RELEASE_NOTES.md
+
       - name: Publish official GitHub release
         shell: pwsh
         env:
@@ -376,6 +600,10 @@ jobs:
 
           if ($files.Count -ne 8) {
               throw "Unexpected number of release assets: $($files.Count)"
+          }
+
+          if (-not (Test-Path -LiteralPath RELEASE_NOTES.md -PathType Leaf)) {
+              throw "Generated release description is missing."
           }
 
           $tagCommit = gh api "repos/$env:GITHUB_REPOSITORY/commits/$env:RELEASE_TAG" --jq ".sha" 2>$null
@@ -409,7 +637,7 @@ jobs:
               --repo $env:GITHUB_REPOSITORY `
               --verify-tag `
               --title "GR Taskbar $version" `
-              --generate-notes
+              --notes-file RELEASE_NOTES.md
 
           if ($LASTEXITCODE -ne 0) {
               throw "GitHub denied release publication. Check GR_RELEASE_TOKEN permissions."
@@ -417,4 +645,5 @@ jobs:
 
           Write-Host "GR Taskbar $version published successfully."
           Write-Host "Published existing build: $env:BUILD_RUN_ID"
+          Write-Host "Complete release description published."
           Write-Host "No rebuilding or re-signing performed."
