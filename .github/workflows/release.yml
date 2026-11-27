@@ -466,62 +466,153 @@ jobs:
               throw "Unexpected number of release assets: $($files.Count)"
           }
 
-          $tagCommit = gh api "repos/$env:GITHUB_REPOSITORY/commits/$env:RELEASE_TAG" --jq ".sha" 2>$null
+          # Separate publication tag from embedded product version.
+          $tag = "$($env:RELEASE_TAG)-build.$($env:BUILD_RUN_ID)"
 
-          if ($LASTEXITCODE -ne 0) {
-              Write-Host "Creating release tag at original build commit."
+          Write-Host "Product version: $version"
+          Write-Host "Publication tag: $tag"
+          Write-Host "Original source: $env:BUILD_SHA"
 
-              gh api --method POST "repos/$env:GITHUB_REPOSITORY/git/refs" `
-                  -f "ref=refs/tags/$env:RELEASE_TAG" `
-                  -f "sha=$env:BUILD_SHA"
+          $existing = gh release view $tag `
+              --repo $env:GITHUB_REPOSITORY `
+              --json isDraft,assets 2>&1
+
+          $lookupCode = $LASTEXITCODE
+
+          if ($lookupCode -eq 0) {
+              $release = $existing | ConvertFrom-Json
+
+              if ($release.isDraft) {
+                  throw "An existing draft requires review: $tag"
+              }
+
+              $tagCommit = gh api `
+                  "repos/$env:GITHUB_REPOSITORY/commits/$tag" `
+                  --jq ".sha"
+
+              if ($LASTEXITCODE -ne 0 -or
+                  $tagCommit -ne $env:BUILD_SHA) {
+                  throw "Existing release source mismatch."
+              }
+
+              $folder = Join-Path $env:RUNNER_TEMP "published-assets"
+
+              New-Item -ItemType Directory `
+                  -Path $folder -Force | Out-Null
+
+              gh release download $tag `
+                  --repo $env:GITHUB_REPOSITORY `
+                  --pattern "*" `
+                  --dir $folder
 
               if ($LASTEXITCODE -ne 0) {
-                  throw "GitHub denied tag creation. Configure GR_RELEASE_TOKEN with repository Contents read/write permission."
+                  throw "Cannot verify existing release assets."
               }
-          }
 
-          $tagCommit = gh api "repos/$env:GITHUB_REPOSITORY/commits/$env:RELEASE_TAG" --jq ".sha"
-
-          if ($LASTEXITCODE -ne 0 -or $tagCommit -ne $env:BUILD_SHA) {
-              throw "Release tag does not match the original build commit."
-          }
-
-          $existing = gh release view $env:RELEASE_TAG `
-              --repo $env:GITHUB_REPOSITORY `
-              --json isDraft,assets 2>$null
-
-          if ($LASTEXITCODE -eq 0) {
-              $release = $existing | ConvertFrom-Json
-              if ($release.isDraft) { throw "An existing draft requires review." }
-              $folder = Join-Path $env:RUNNER_TEMP "published-assets"
-              New-Item -ItemType Directory -Path $folder -Force | Out-Null
-              gh release download $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --pattern "*" --dir $folder
-              if ($LASTEXITCODE -ne 0) { throw "Cannot verify existing release assets." }
               foreach ($file in $files) {
                   $published = Join-Path $folder (Split-Path $file -Leaf)
+
                   if (-not (Test-Path -LiteralPath $published -PathType Leaf)) {
                       throw "Published asset missing: $published"
                   }
-                  if ((Get-FileHash -LiteralPath $file).Hash -ne (Get-FileHash -LiteralPath $published).Hash) {
-                      throw "Published asset checksum mismatch: $published"
+
+                  if ((Get-FileHash $file).Hash -ne
+                      (Get-FileHash $published).Hash) {
+                      throw "Published asset checksum mismatch."
                   }
               }
-              gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --notes-file RELEASE_NOTES.md
-              if ($LASTEXITCODE -ne 0) { throw "Release description update failed." }
-              Write-Host "Existing release description updated; assets unchanged."
+
+              gh release edit $tag `
+                  --repo $env:GITHUB_REPOSITORY `
+                  --notes-file RELEASE_NOTES.md
+
+              if ($LASTEXITCODE -ne 0) {
+                  throw "Release description update failed."
+              }
+
+              Write-Host "Existing release description updated."
               exit 0
           }
 
-          gh release create $env:RELEASE_TAG @files `
+          if (($existing | Out-String) -notmatch 'release not found|HTTP 404') {
+              throw "Release lookup failed: $existing"
+          }
+
+          # Check whether the proposed tag already exists.
+          $tagCommit = gh api `
+              "repos/$env:GITHUB_REPOSITORY/commits/$tag" `
+              --jq ".sha" 2>&1
+
+          $tagCode = $LASTEXITCODE
+
+          if ($tagCode -eq 0) {
+              if ($tagCommit -ne $env:BUILD_SHA) {
+                  throw "Existing tag points to a different build."
+              }
+          }
+          elseif (($tagCommit | Out-String) -notmatch 'HTTP 404|HTTP 422') {
+              throw "Tag lookup failed: $tagCommit"
+          }
+
+          # Let GitHub create the release tag at the original build commit.
+          gh release create $tag @files `
               --repo $env:GITHUB_REPOSITORY `
-              --verify-tag `
+              --target $env:BUILD_SHA `
+              --draft `
               --title "GR Taskbar $version" `
               --notes-file RELEASE_NOTES.md
 
           if ($LASTEXITCODE -ne 0) {
-              throw "GitHub rejected release publication. Review the API error above. Retired immutable tags cannot be reused."
+              throw "Draft release creation failed. Review the GitHub error above."
+          }
+
+          $draft = gh release view $tag `
+              --repo $env:GITHUB_REPOSITORY `
+              --json isDraft,assets
+
+          if ($LASTEXITCODE -ne 0) {
+              throw "Unable to verify draft release."
+          }
+
+          $draft = $draft | ConvertFrom-Json
+
+          if (-not $draft.isDraft -or $draft.assets.Count -ne 8) {
+              throw "Draft release verification failed."
+          }
+
+          foreach ($file in $files) {
+              $name = Split-Path $file -Leaf
+
+              $asset = @(
+                  $draft.assets | Where-Object {
+                      $_.name -eq $name
+                  }
+              )
+
+              if ($asset.Count -ne 1 -or
+                  $asset[0].size -ne (Get-Item $file).Length) {
+                  throw "Draft asset verification failed: $name"
+              }
+          }
+
+          gh release edit $tag `
+              --repo $env:GITHUB_REPOSITORY `
+              --draft=false
+
+          if ($LASTEXITCODE -ne 0) {
+              throw "Release publication failed. Review the GitHub error above."
+          }
+
+          $tagCommit = gh api `
+              "repos/$env:GITHUB_REPOSITORY/commits/$tag" `
+              --jq ".sha"
+
+          if ($LASTEXITCODE -ne 0 -or
+              $tagCommit -ne $env:BUILD_SHA) {
+              throw "Published tag source verification failed."
           }
 
           Write-Host "GR Taskbar $version published successfully."
-          Write-Host "Published existing build: $env:BUILD_RUN_ID"
+          Write-Host "Publication tag: $tag"
+          Write-Host "Complete numbered changelog included."
           Write-Host "No rebuilding or re-signing performed."
