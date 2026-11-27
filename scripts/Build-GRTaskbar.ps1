@@ -9,6 +9,7 @@ param(
     [string]$WorkRoot,
     [string]$VisualStudioPath,
     [string]$SignToolPath,
+    [string]$NuGetPath,
     [string]$TimestampUrl = 'http://timestamp.digicert.com',
     [switch]$SkipCompile
 )
@@ -69,6 +70,22 @@ function Invoke-GRBuild {
     if ($LASTEXITCODE -ne 0) { throw "Build failed: $Label (exit $LASTEXITCODE)." }
 }
 
+# Resolve the build helper explicitly; local tooling need not be on PATH.
+if (-not $SkipCompile) {
+    if (-not $NuGetPath) {
+        $nugetCommand = Get-Command nuget.exe -ErrorAction SilentlyContinue
+        if ($nugetCommand) { $NuGetPath = $nugetCommand.Source }
+        else {
+            foreach ($candidate in @((Join-Path $WorkRoot 'nuget.exe'), (Join-Path (Split-Path $WorkRoot -Parent) 'nuget.exe'))) {
+                if (Test-Path -LiteralPath $candidate -PathType Leaf) { $NuGetPath = $candidate; break }
+            }
+        }
+    }
+    if (-not $NuGetPath -or -not (Test-Path -LiteralPath $NuGetPath -PathType Leaf)) {
+        throw 'NuGet was not found. Pass -NuGetPath pointing to your installed nuget.exe.'
+    }
+    $NuGetPath = (Resolve-Path -LiteralPath $NuGetPath).ProviderPath
+}
 $arch = if ($Platform -eq 'amd64') { 'x64' } else { 'ARM64' }
 $output = Join-Path $root "build\$Configuration\$arch"
 $payload = Join-Path $output 'gr_setup_files'
@@ -83,8 +100,8 @@ if (-not $SkipCompile) {
         Remove-Item -LiteralPath $resolved -Recurse -Force
     }
     Invoke-GRBuild -Label compile -Commands @(
-        'nuget restore GR-Taskbar.sln',
-        'nuget restore gr_starttiledata\gr_starttiledata.slnx',
+        ('"{0}" restore GR-Taskbar.sln' -f $NuGetPath),
+        ('"{0}" restore gr_starttiledata\gr_starttiledata.slnx' -f $NuGetPath),
         ('call BuildDependencies{0}.bat' -f $Configuration),
         ('"{0}" GR-Taskbar.sln /m /p:Configuration={1} /p:Platform=IA-32 /v:minimal' -f $msbuild,$Configuration),
         ('"{0}" gr_starttiledata\gr_starttiledata.vcxproj /m /p:Configuration={1} /p:Platform={2} "/p:SolutionDir={3}/" /v:minimal' -f $msbuild,$Configuration,$arch,$root.Replace('\','/')),
