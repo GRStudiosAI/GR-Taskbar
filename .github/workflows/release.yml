@@ -357,7 +357,7 @@ jobs:
           Get-ChildItem release -File |
               Select-Object Name, Length
 
-      - name: Generate complete official release description
+      - name: Generate release description from numbered changelog
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -367,219 +367,83 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
 
-          $version = $env:RELEASE_TAG.Substring(1)
-          $date = (Get-Date).ToUniversalTime().ToString("MMMM dd, yyyy")
+          function Read-RepositoryFile([string]$Path, [string]$Ref) {
+              $response = gh api "repos/$env:GITHUB_REPOSITORY/contents/${Path}?ref=$Ref"
+              if ($LASTEXITCODE -ne 0) { throw "Cannot retrieve $Path" }
+              $file = $response | ConvertFrom-Json
+              if ($file.encoding -ne "base64") { throw "Unexpected encoding: $Path" }
+              return [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($file.content))
+          }
+
+          $ref = gh api "repos/$env:GITHUB_REPOSITORY/commits/master" --jq '.sha'
+          if ($LASTEXITCODE -ne 0 -or $ref -notmatch '^[a-f0-9]{40}$') {
+              throw "Cannot resolve changelog history."
+          }
+          $index = Read-RepositoryFile 'changelogs/index.json' $ref | ConvertFrom-Json
+          $matchesForBuild = @($index | Where-Object {
+              "$($_.build_run_id)" -eq $env:BUILD_RUN_ID -and $_.source_commit -eq $env:BUILD_SHA
+          })
+          if ($matchesForBuild.Count -ne 1) {
+              throw "Complete the changelog workflow for build $env:BUILD_RUN_ID first."
+          }
+          $entry = $matchesForBuild[0]
+          $version = [version]$env:RELEASE_TAG.Substring(1)
+          if ($version.Revision -eq -1) { $version = [version]"$version.0" }
+          if ($entry.number -notmatch '^\d{6}$' -or [version]$entry.version -ne $version) {
+              throw "Changelog number or version mismatch."
+          }
+          $folder = "changelogs/$($entry.number)"
+          if ($entry.changelog -ne "$folder/CHANGELOG.md") { throw "Invalid changelog path." }
+          $metadata = Read-RepositoryFile "$folder/build-info.json" $ref | ConvertFrom-Json
+          if ("$($metadata.build_run_id)" -ne $env:BUILD_RUN_ID -or
+              $metadata.source_commit -ne $env:BUILD_SHA -or
+              $metadata.number -ne $entry.number -or [version]$metadata.version -ne $version) {
+              throw "Changelog metadata mismatch."
+          }
+          $changelog = Read-RepositoryFile "$folder/CHANGELOG.md" $ref
+          if ([string]::IsNullOrWhiteSpace($changelog)) { throw "Changelog is empty." }
           $repository = "https://github.com/$env:GITHUB_REPOSITORY"
-          $shortSha = $env:BUILD_SHA.Substring(0, 12)
-
-          # Retrieve the actual GitHub-generated release changes.
-          $generated = gh api --method POST `
-              "repos/$env:GITHUB_REPOSITORY/releases/generate-notes" `
-              -f "tag_name=$env:RELEASE_TAG" `
-              -f "target_commitish=$env:BUILD_SHA"
-
-          $generatedExitCode = $LASTEXITCODE
-          $changes = ""
-
-          if ($generatedExitCode -eq 0) {
-              $generatedNotes = $generated | ConvertFrom-Json
-              $changes = $generatedNotes.body
-          }
-
-          # Retrieve source commit history when generated notes
-          # are unavailable or contain no useful change details.
-          if ([string]::IsNullOrWhiteSpace($changes)) {
-              Write-Host "Retrieving source commit history."
-
-              $history = gh api `
-                  "repos/$env:GITHUB_REPOSITORY/commits?sha=$env:BUILD_SHA&per_page=30"
-
-              if ($LASTEXITCODE -eq 0) {
-                  $commits = $history | ConvertFrom-Json
-
-                  $changes = (
-                      $commits | ForEach-Object {
-                          $message = ($_.commit.message -split "\r?\n")[0]
-                          $commitSha = $_.sha.Substring(0, 7)
-                          "- $message ([$commitSha]($repository/commit/$($_.sha)))"
-                      }
-                  ) -join "`n"
-              }
-          }
-
-          if ([string]::IsNullOrWhiteSpace($changes)) {
-              $changes = "Detailed change history is available in the linked source commit."
-          }
-
           $notes = @"
-          # GR Taskbar $version
+          # GR Taskbar $($env:RELEASE_TAG.Substring(1))
 
-          Official public release of GR Taskbar by GR Studios AI LLC.
+          Official release by GR Studios AI LLC.
 
-          ## Release Information
-
-          | Property | Details |
-          | --- | --- |
-          | Product | GR Taskbar |
-          | Version | $version |
-          | Release Date | $date (UTC) |
-          | Developer | GR Studios AI LLC |
-          | Release Channel | Official |
-          | Architectures | AMD64 (x64) and ARM64 |
-          | Signing Mode | Self-signed code signing |
-          | Build Run | [$env:BUILD_RUN_ID]($repository/actions/runs/$env:BUILD_RUN_ID) |
-          | Source Commit | [$shortSha]($repository/commit/$env:BUILD_SHA) |
-
-          ## About GR Taskbar
-
-          GR Taskbar is a Windows desktop customization project developed by GR Studios AI LLC.
-
-          The project is designed to provide greater control over the Windows taskbar, Start menu, desktop appearance, and personalization experience.
-
-          GR Taskbar incorporates open-source foundations from ExplorerPatcher while maintaining its own branding, development direction, customization features, and release infrastructure.
-
-          ## What's New
-
-          The following changes are generated from the repository's development history.
-
-          $changes
-
-          ## Project Features
-
-          GR Taskbar focuses on the following areas of Windows customization:
-
-          - Taskbar personalization.
-          - Start menu customization.
-          - Custom Start button icons.
-          - Desktop appearance customization.
-          - Mouse cursor personalization.
-          - Classic Windows-inspired appearance options.
-          - Dedicated GR Settings interface.
-          - Installer servicing and maintenance.
-          - Windows desktop integration.
-
-          Feature availability may depend on the Windows version and configuration.
+          $changelog
 
           ## Available Downloads
 
           | File | Description |
           | --- | --- |
-          | GR-Taskbar-Setup.exe | AMD64 / x64 Windows installer |
-          | GR-Taskbar-Setup-ARM64.exe | ARM64 Windows installer |
-          | GR-Taskbar-Public.cer | Public code-signing certificate |
+          | GR-Taskbar-Setup.exe | AMD64 / x64 installer |
+          | GR-Taskbar-Setup-ARM64.exe | ARM64 installer |
           | GR-Taskbar-amd64.cat | AMD64 security catalog |
           | GR-Taskbar-arm64.cat | ARM64 security catalog |
-          | GR-Taskbar-SIGNING-REPORT-amd64.json | AMD64 signing verification report |
-          | GR-Taskbar-SIGNING-REPORT-arm64.json | ARM64 signing verification report |
-          | SHA256SUMS.txt | SHA-256 release file checksums |
+          | GR-Taskbar-SIGNING-REPORT-amd64.json | AMD64 signing report |
+          | GR-Taskbar-SIGNING-REPORT-arm64.json | ARM64 signing report |
+          | GR-Taskbar-Public.cer | Public signing certificate |
+          | SHA256SUMS.txt | Release integrity checksums |
 
-          ## Installation
+          ## Security and Installation
 
-          1. Check your Windows system architecture.
-          2. Download the appropriate installer from the Assets section.
-          3. Verify the installer checksum and signing information.
-          4. Close unnecessary applications and save your work.
-          5. Run the appropriate installer.
-          6. Follow the installation instructions.
-          7. Restart Windows if required by the installer.
+          Select the installer matching your Windows architecture. Verify its checksum and publisher before installation. Save your work before running the installer.
 
-          Most Intel and AMD desktop computers use the AMD64 installer.
-
-          Windows computers using ARM processors require the ARM64 installer.
-
-          ## Digital Signatures and Security
-
-          Both installation packages have been verified against the original build's signing certificate.
-
-          Release verification includes:
-
-          - Installer signature verification.
-          - Security catalog signature verification.
-          - Certificate thumbprint verification.
-          - Timestamp verification.
-          - SHA-256 artifact integrity verification.
-          - Installer product version verification.
-          - Original build source commit verification.
-          - Validation of build-time tamper detection reports.
-          - Validation of build-time payload catalog reports.
-
-          The installers use a self-signed code-signing certificate issued by GR Studios AI LLC.
-
-          Windows may display an untrusted publisher or SmartScreen warning because the certificate is not automatically trusted by Windows.
-
-          Users should verify the publisher, certificate, and SHA-256 checksums before installing. Do not disable Windows security protections to install software.
-
-          ## Release Integrity
-
-          This release was published using previously completed and verified GitHub build artifacts.
-
-          The release workflow does not rebuild, modify, or re-sign the original installers.
-
-          The SHA256SUMS.txt file contains SHA-256 checksums for the published release assets.
-
-          ## Build and Verification Status
-
-          | Verification | Result |
-          | --- | --- |
-          | Original build | Successful |
-          | AMD64 artifacts | Verified |
-          | ARM64 artifacts | Verified |
-          | Installer signatures | Verified |
-          | Catalog signatures | Verified |
-          | Certificate identity | Verified |
-          | Artifact checksums | Verified |
-          | Product versions | Verified |
-          | Build-time tamper detection | Passed |
-          | Build-time payload catalog validation | Passed |
-
-          ## Compatibility and Known Issues
-
-          Windows customization behavior may vary between Windows versions, system configurations, and installed updates.
-
-          Review the project documentation and issue tracker for current compatibility information and known issues.
+          The installers use a self-signed code-signing certificate. Windows may display an untrusted publisher warning. Do not disable Windows security protections.
 
           ## Support and Documentation
 
-          - [Official GR Taskbar repository]($repository)
           - [Project documentation]($repository/wiki)
-          - [Report a bug]($repository/issues)
+          - [Report an issue]($repository/issues)
           - [Community discussions]($repository/discussions)
-          - [Release history]($repository/releases)
-          - [Source code]($repository/tree/$env:BUILD_SHA)
-          - [Original GitHub build]($repository/actions/runs/$env:BUILD_RUN_ID)
+          - [Complete numbered changelog]($repository/blob/$ref/$folder/CHANGELOG.md)
+          - [Original build]($repository/actions/runs/$env:BUILD_RUN_ID)
 
-          ## Licensing and Acknowledgments
-
-          GR Taskbar incorporates open-source work from ExplorerPatcher and its contributors.
-
-          Applicable upstream licenses, copyright notices, and acknowledgments remain part of the project.
-
-          Refer to the repository's licensing documentation for applicable terms.
-
-          ---
+          GR Taskbar incorporates open-source work from ExplorerPatcher and its contributors. Refer to the repository license for applicable terms.
 
           **GR Studios AI LLC**
 
           *Where Imagination Meets Intelligence.*
-
-          Official GR Taskbar Release $version
           "@
-
-          $notes | Set-Content `
-              -LiteralPath RELEASE_NOTES.md `
-              -Encoding utf8
-
-          if (-not (Test-Path -LiteralPath RELEASE_NOTES.md)) {
-              throw "Release description generation failed."
-          }
-
-          if ((Get-Item RELEASE_NOTES.md).Length -eq 0) {
-              throw "Generated release description is empty."
-          }
-
-          Write-Host "Complete release description generated successfully."
-
-          Get-Content RELEASE_NOTES.md
+          $notes | Set-Content -LiteralPath RELEASE_NOTES.md -Encoding utf8
 
       - name: Publish official GitHub release
         shell: pwsh
@@ -602,10 +466,6 @@ jobs:
               throw "Unexpected number of release assets: $($files.Count)"
           }
 
-          if (-not (Test-Path -LiteralPath RELEASE_NOTES.md -PathType Leaf)) {
-              throw "Generated release description is missing."
-          }
-
           $tagCommit = gh api "repos/$env:GITHUB_REPOSITORY/commits/$env:RELEASE_TAG" --jq ".sha" 2>$null
 
           if ($LASTEXITCODE -ne 0) {
@@ -626,11 +486,30 @@ jobs:
               throw "Release tag does not match the original build commit."
           }
 
-          gh release view $env:RELEASE_TAG `
-              --repo $env:GITHUB_REPOSITORY 2>$null
+          $existing = gh release view $env:RELEASE_TAG `
+              --repo $env:GITHUB_REPOSITORY `
+              --json isDraft,assets 2>$null
 
           if ($LASTEXITCODE -eq 0) {
-              throw "Release $env:RELEASE_TAG already exists."
+              $release = $existing | ConvertFrom-Json
+              if ($release.isDraft) { throw "An existing draft requires review." }
+              $folder = Join-Path $env:RUNNER_TEMP "published-assets"
+              New-Item -ItemType Directory -Path $folder -Force | Out-Null
+              gh release download $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --pattern "*" --dir $folder
+              if ($LASTEXITCODE -ne 0) { throw "Cannot verify existing release assets." }
+              foreach ($file in $files) {
+                  $published = Join-Path $folder (Split-Path $file -Leaf)
+                  if (-not (Test-Path -LiteralPath $published -PathType Leaf)) {
+                      throw "Published asset missing: $published"
+                  }
+                  if ((Get-FileHash -LiteralPath $file).Hash -ne (Get-FileHash -LiteralPath $published).Hash) {
+                      throw "Published asset checksum mismatch: $published"
+                  }
+              }
+              gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --notes-file RELEASE_NOTES.md
+              if ($LASTEXITCODE -ne 0) { throw "Release description update failed." }
+              Write-Host "Existing release description updated; assets unchanged."
+              exit 0
           }
 
           gh release create $env:RELEASE_TAG @files `
@@ -640,10 +519,9 @@ jobs:
               --notes-file RELEASE_NOTES.md
 
           if ($LASTEXITCODE -ne 0) {
-              throw "GitHub denied release publication. Check GR_RELEASE_TOKEN permissions."
+              throw "GitHub rejected release publication. Review the API error above. Retired immutable tags cannot be reused."
           }
 
           Write-Host "GR Taskbar $version published successfully."
           Write-Host "Published existing build: $env:BUILD_RUN_ID"
-          Write-Host "Complete release description published."
           Write-Host "No rebuilding or re-signing performed."
