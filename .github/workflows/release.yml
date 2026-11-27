@@ -104,28 +104,6 @@ jobs:
           Write-Host "Using completed build $($run.id)"
           Write-Host "Original source commit: $($run.head_sha)"
 
-      - name: Validate authorized release tag
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.tag }}
-          BUILD_SHA: ${{ steps.build.outputs.sha }}
-        run: |
-          $ErrorActionPreference = "Stop"
-
-          $tagCommit = gh api "repos/$env:GITHUB_REPOSITORY/commits/$env:RELEASE_TAG" --jq ".sha"
-
-          if ($LASTEXITCODE -ne 0) {
-              throw "Release tag $env:RELEASE_TAG must first be created by an authorized repository administrator at commit $env:BUILD_SHA."
-          }
-
-          if ($tagCommit -ne $env:BUILD_SHA) {
-              throw "Release tag does not match the original build commit."
-          }
-
-          Write-Host "Release tag verified: $env:RELEASE_TAG"
-          Write-Host "Release commit verified: $tagCommit"
-
       - name: Checkout original verification tools
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
@@ -382,7 +360,7 @@ jobs:
       - name: Publish official GitHub release
         shell: pwsh
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GR_RELEASE_TOKEN || github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
           BUILD_SHA: ${{ steps.build.outputs.sha }}
           BUILD_RUN_ID: ${{ steps.build.outputs.run_id }}
@@ -390,19 +368,6 @@ jobs:
           $ErrorActionPreference = "Stop"
 
           $version = $env:RELEASE_TAG.Substring(1)
-
-          $tagCommit = gh api "repos/$env:GITHUB_REPOSITORY/commits/$env:RELEASE_TAG" --jq ".sha"
-
-          if ($LASTEXITCODE -ne 0 -or $tagCommit -ne $env:BUILD_SHA) {
-              throw "Release tag verification failed."
-          }
-
-          gh release view $env:RELEASE_TAG `
-              --repo $env:GITHUB_REPOSITORY 2>$null
-
-          if ($LASTEXITCODE -eq 0) {
-              throw "Release $env:RELEASE_TAG already exists."
-          }
 
           $files = @(
               Get-ChildItem release -File |
@@ -413,6 +378,33 @@ jobs:
               throw "Unexpected number of release assets: $($files.Count)"
           }
 
+          $tagCommit = gh api "repos/$env:GITHUB_REPOSITORY/commits/$env:RELEASE_TAG" --jq ".sha" 2>$null
+
+          if ($LASTEXITCODE -ne 0) {
+              Write-Host "Creating release tag at original build commit."
+
+              gh api --method POST "repos/$env:GITHUB_REPOSITORY/git/refs" `
+                  -f "ref=refs/tags/$env:RELEASE_TAG" `
+                  -f "sha=$env:BUILD_SHA"
+
+              if ($LASTEXITCODE -ne 0) {
+                  throw "GitHub denied tag creation. Configure GR_RELEASE_TOKEN with repository Contents read/write permission."
+              }
+          }
+
+          $tagCommit = gh api "repos/$env:GITHUB_REPOSITORY/commits/$env:RELEASE_TAG" --jq ".sha"
+
+          if ($LASTEXITCODE -ne 0 -or $tagCommit -ne $env:BUILD_SHA) {
+              throw "Release tag does not match the original build commit."
+          }
+
+          gh release view $env:RELEASE_TAG `
+              --repo $env:GITHUB_REPOSITORY 2>$null
+
+          if ($LASTEXITCODE -eq 0) {
+              throw "Release $env:RELEASE_TAG already exists."
+          }
+
           gh release create $env:RELEASE_TAG @files `
               --repo $env:GITHUB_REPOSITORY `
               --verify-tag `
@@ -420,7 +412,7 @@ jobs:
               --generate-notes
 
           if ($LASTEXITCODE -ne 0) {
-              throw "GitHub release publication failed. Check effective workflow token permissions and repository release restrictions."
+              throw "GitHub denied release publication. Check GR_RELEASE_TOKEN permissions."
           }
 
           Write-Host "GR Taskbar $version published successfully."
