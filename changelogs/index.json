@@ -1,0 +1,15 @@
+[
+  {
+    "number": "000001",
+    "version": "26100.9711.71.16",
+    "build_run_id": "46058377152",
+    "source_commit": "a05110341425f1123e1036af21b8900f3a951d0c",
+    "build_date": "11/27/2026 19:49:13",
+    "architectures": [
+      "amd64",
+      "arm64"
+    ],
+    "changelog": "changelogs/000001/CHANGELOG.md",
+    "previous_build_run_id": null
+  }
+]
