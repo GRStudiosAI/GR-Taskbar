@@ -8,6 +8,11 @@ on:
         required: true
         default: v1.0.0
         type: string
+      build_run_id:
+        description: Successful GitHub build run ID
+        required: true
+        default: '46058377152'
+        type: string
 
 permissions:
   contents: write
@@ -27,11 +32,12 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - name: Locate successful official build
+      - name: Locate completed GitHub build
         id: build
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          BUILD_RUN_ID: ${{ inputs.build_run_id }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
           $ErrorActionPreference = "Stop"
@@ -40,57 +46,73 @@ jobs:
               throw "Invalid release version."
           }
 
-          $runs = gh run list `
-              --repo $env:GITHUB_REPOSITORY `
-              --workflow build.yml `
-              --branch master `
-              --status success `
-              --limit 100 `
-              --json databaseId,headSha,conclusion |
-              ConvertFrom-Json
+          if ($env:BUILD_RUN_ID -notmatch '^[0-9]+$') {
+              throw "Invalid build run ID."
+          }
+
+          $json = gh api `
+              "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:BUILD_RUN_ID"
 
           if ($LASTEXITCODE -ne 0) {
-              throw "Unable to retrieve build runs."
+              throw "Unable to retrieve GitHub build."
           }
 
-          $selected = $null
+          $run = $json | ConvertFrom-Json
 
-          foreach ($run in $runs) {
-              $artifacts = gh api `
-                  "repos/$env:GITHUB_REPOSITORY/actions/runs/$($run.databaseId)/artifacts?per_page=100" |
-                  ConvertFrom-Json
+          if ($run.conclusion -ne "success") {
+              throw "Selected build was not successful."
+          }
 
-              if ($LASTEXITCODE -ne 0) {
-                  throw "Unable to retrieve build artifacts."
+          if ($run.path -ne ".github/workflows/build.yml") {
+              throw "Selected run is not an official build."
+          }
+
+          if ($run.head_branch -ne "master") {
+              throw "Selected build is not from master."
+          }
+
+          if ($run.head_repository.full_name -ne $env:GITHUB_REPOSITORY) {
+              throw "Selected build belongs to another repository."
+          }
+
+          $json = gh api `
+              "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:BUILD_RUN_ID/artifacts?per_page=100"
+
+          if ($LASTEXITCODE -ne 0) {
+              throw "Unable to retrieve GitHub artifacts."
+          }
+
+          $artifacts = $json | ConvertFrom-Json
+
+          foreach ($arch in @("amd64", "arm64")) {
+              $name = "GR-Taskbar-Release-$arch-$($run.head_sha)"
+
+              $matching = @(
+                  $artifacts.artifacts | Where-Object {
+                      $_.name -eq $name -and -not $_.expired
+                  }
+              )
+
+              if ($matching.Count -ne 1) {
+                  throw "Missing or expired GitHub artifact: $name"
               }
 
-              $amd64 = @($artifacts.artifacts | Where-Object {
-                  $_.name -eq "GR-Taskbar-Release-amd64-$($run.headSha)" -and
-                  -not $_.expired
-              })
-
-              $arm64 = @($artifacts.artifacts | Where-Object {
-                  $_.name -eq "GR-Taskbar-Release-arm64-$($run.headSha)" -and
-                  -not $_.expired
-              })
-
-              if ($amd64.Count -eq 1 -and $arm64.Count -eq 1) {
-                  $selected = $run
-                  break
-              }
+              Write-Host "Confirmed artifact: $name"
           }
 
-          if (-not $selected) {
-              throw "No successful Release build with both unexpired architecture artifacts was found."
-          }
+          "run_id=$($run.id)" >> $env:GITHUB_OUTPUT
+          "sha=$($run.head_sha)" >> $env:GITHUB_OUTPUT
 
-          "run_id=$($selected.databaseId)" >> $env:GITHUB_OUTPUT
-          "sha=$($selected.headSha)" >> $env:GITHUB_OUTPUT
+          Write-Host "Using completed build $($run.id)"
+          Write-Host "Original source commit: $($run.head_sha)"
 
-          Write-Host "Using successful build: $($selected.databaseId)"
-          Write-Host "Source commit: $($selected.headSha)"
+      - name: Checkout original verification tools
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ steps.build.outputs.sha }}
+          persist-credentials: false
 
-      - name: Download signed AMD64 installer
+      - name: Download existing AMD64 release
         uses: actions/download-artifact@v7
         with:
           github-token: ${{ github.token }}
@@ -98,7 +120,7 @@ jobs:
           name: GR-Taskbar-Release-amd64-${{ steps.build.outputs.sha }}
           path: artifacts/amd64
 
-      - name: Download signed ARM64 installer
+      - name: Download existing ARM64 release
         uses: actions/download-artifact@v7
         with:
           github-token: ${{ github.token }}
@@ -106,15 +128,41 @@ jobs:
           name: GR-Taskbar-Release-arm64-${{ steps.build.outputs.sha }}
           path: artifacts/arm64
 
-      - name: Verify existing signed artifacts
+      - name: Verify completed release artifacts
         shell: pwsh
         env:
           RELEASE_TAG: ${{ inputs.tag }}
-          GR_SIGN_CERT_THUMBPRINT: ${{ vars.GR_SIGN_CERT_THUMBPRINT }}
         run: |
           $ErrorActionPreference = "Stop"
 
           $version = $env:RELEASE_TAG.Substring(1)
+
+          $verificationScript = Join-Path `
+              $env:GITHUB_WORKSPACE `
+              "scripts/ReleaseVerification.ps1"
+
+          if (-not (Test-Path -LiteralPath $verificationScript)) {
+              throw "Original verification script is missing."
+          }
+
+          . $verificationScript
+
+          $certificatePath = Join-Path `
+              $env:GITHUB_WORKSPACE `
+              "scripts/signing/GR-Taskbar-Public.cer"
+
+          if (-not (Test-Path -LiteralPath $certificatePath)) {
+              throw "Original public certificate is missing."
+          }
+
+          $expectedCertificate = `
+              [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
+                  (Resolve-Path $certificatePath).Path
+              )
+
+          $expectedCertificateHash = (
+              Get-FileHash -LiteralPath $certificatePath -Algorithm SHA256
+          ).Hash
 
           foreach ($arch in @("amd64", "arm64")) {
               $src = "artifacts/$arch"
@@ -135,14 +183,14 @@ jobs:
               )
 
               foreach ($name in $required) {
-                  $path = Join-Path $src $name
+                  $file = Join-Path $src $name
 
-                  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-                      throw "Missing artifact: $path"
+                  if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+                      throw "Missing release artifact: $file"
                   }
 
-                  if ((Get-Item -LiteralPath $path).Length -eq 0) {
-                      throw "Empty artifact: $path"
+                  if ((Get-Item -LiteralPath $file).Length -eq 0) {
+                      throw "Empty release artifact: $file"
                   }
               }
 
@@ -164,11 +212,15 @@ jobs:
                       throw "Unexpected checksum entry: $name"
                   }
 
+                  if ($verified.ContainsKey($name)) {
+                      throw "Duplicate checksum entry: $name"
+                  }
+
                   $file = Join-Path $src $name
 
-                  $actual = (Get-FileHash `
-                      -LiteralPath $file `
-                      -Algorithm SHA256).Hash
+                  $actual = (
+                      Get-FileHash -LiteralPath $file -Algorithm SHA256
+                  ).Hash
 
                   if ($actual -ne $expected) {
                       throw "Checksum mismatch: $file"
@@ -178,8 +230,9 @@ jobs:
               }
 
               foreach ($name in $required) {
-                  if ($name -ne "SHA256SUMS.txt" -and -not $verified.ContainsKey($name)) {
-                      throw "Missing checksum for $name"
+                  if ($name -ne "SHA256SUMS.txt" -and
+                      -not $verified.ContainsKey($name)) {
+                      throw "Missing checksum: $name"
                   }
               }
 
@@ -188,49 +241,44 @@ jobs:
                   -Raw | ConvertFrom-Json
 
               if ($report.CatalogPayloadVerification -ne "Valid") {
-                  throw "Catalog verification failed for $arch."
+                  throw "Payload catalog verification failed: $arch"
               }
 
               if ($report.SigningMode -ne "SelfSigned") {
-                  throw "Unexpected signing mode for $arch."
+                  throw "Unexpected signing mode: $arch"
               }
 
               if ($report.TamperDetection -notmatch '^Passed') {
-                  throw "Tamper detection verification failed for $arch."
+                  throw "Tamper detection verification failed: $arch"
               }
 
-              $public = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
-                  (Resolve-Path "$src/GR-Taskbar-Public.cer").Path
-              )
+              $artifactCertificateHash = (
+                  Get-FileHash `
+                      "$src/GR-Taskbar-Public.cer" `
+                      -Algorithm SHA256
+              ).Hash
 
-              $signature = Get-AuthenticodeSignature `
-                  -LiteralPath "$src/$installer"
-
-              if (-not $signature.SignerCertificate) {
-                  throw "Installer is unsigned: $installer"
+              if ($artifactCertificateHash -ne $expectedCertificateHash) {
+                  throw "Artifact certificate does not match original build."
               }
 
-              if ($signature.SignerCertificate.Thumbprint -ne $public.Thumbprint) {
-                  throw "Installer signing certificate mismatch."
-              }
+              # Reuse the original build's native Windows
+              # signature verification implementation.
+              # No signing or certificate installation occurs.
 
-              if ($env:GR_SIGN_CERT_THUMBPRINT) {
-                  $expectedThumbprint = (
-                      $env:GR_SIGN_CERT_THUMBPRINT -replace '\s',''
-                  ).ToUpperInvariant()
+              $installerVerification = Test-GRSignature `
+                  -Path (Resolve-Path "$src/$installer").Path `
+                  -Thumbprint $expectedCertificate.Thumbprint `
+                  -Mode SelfSigned
 
-                  if ($public.Thumbprint -ne $expectedThumbprint) {
-                      throw "Unexpected signing certificate."
-                  }
-              }
+              $installerVerification | Format-List
 
-              if ($signature.Status -notin @("Valid", "NotTrusted")) {
-                  throw "Installer signature verification failed: $($signature.Status)"
-              }
+              $catalogVerification = Test-GRSignature `
+                  -Path (Resolve-Path "$src/GR-Taskbar.cat").Path `
+                  -Thumbprint $expectedCertificate.Thumbprint `
+                  -Mode SelfSigned
 
-              if (-not $signature.TimeStamperCertificate) {
-                  throw "Installer timestamp is missing."
-              }
+              $catalogVerification | Format-List
 
               $info = (Get-Item "$src/$installer").VersionInfo
 
@@ -239,24 +287,15 @@ jobs:
                   $info.ProductMinorPart, `
                   $info.ProductBuildPart
 
-              if ($actualVersion -ne $version -or $info.ProductPrivatePart -ne 0) {
+              if ($actualVersion -ne $version -or
+                  $info.ProductPrivatePart -ne 0) {
                   throw "Installer version does not match $version."
               }
 
-              Write-Host "$arch artifacts verified successfully."
+              Write-Host "$arch release artifacts verified successfully."
           }
 
-          $amd64Cert = (Get-FileHash `
-              "artifacts/amd64/GR-Taskbar-Public.cer").Hash
-
-          $arm64Cert = (Get-FileHash `
-              "artifacts/arm64/GR-Taskbar-Public.cer").Hash
-
-          if ($amd64Cert -ne $arm64Cert) {
-              throw "Architecture signing certificates do not match."
-          }
-
-      - name: Prepare official release assets
+      - name: Prepare GitHub release assets
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -274,7 +313,9 @@ jobs:
                   "GR-Taskbar-Setup-ARM64.exe"
               }
 
-              Copy-Item "$src/$installer" release
+              Copy-Item `
+                  "$src/$installer" `
+                  "release/$installer"
 
               Copy-Item `
                   "$src/GR-Taskbar.cat" `
@@ -283,11 +324,23 @@ jobs:
               Copy-Item `
                   "$src/GR-Taskbar-SIGNING-REPORT.json" `
                   "release/GR-Taskbar-SIGNING-REPORT-$arch.json"
+
+              $originalHash = (
+                  Get-FileHash "$src/$installer" -Algorithm SHA256
+              ).Hash
+
+              $releaseHash = (
+                  Get-FileHash "release/$installer" -Algorithm SHA256
+              ).Hash
+
+              if ($originalHash -ne $releaseHash) {
+                  throw "Installer changed during release preparation."
+              }
           }
 
           Copy-Item `
               "artifacts/amd64/GR-Taskbar-Public.cer" `
-              release
+              "release/GR-Taskbar-Public.cer"
 
           Get-ChildItem release -File |
               Sort-Object Name |
@@ -298,12 +351,16 @@ jobs:
               } |
               Set-Content release/SHA256SUMS.txt -Encoding ascii
 
+          Get-ChildItem release -File |
+              Select-Object Name, Length
+
       - name: Publish official GitHub release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
           BUILD_SHA: ${{ steps.build.outputs.sha }}
+          BUILD_RUN_ID: ${{ steps.build.outputs.run_id }}
         run: |
           $ErrorActionPreference = "Stop"
 
@@ -316,8 +373,10 @@ jobs:
               throw "Release $env:RELEASE_TAG already exists."
           }
 
-          $files = @(Get-ChildItem release -File |
-              ForEach-Object FullName)
+          $files = @(
+              Get-ChildItem release -File |
+                  ForEach-Object FullName
+          )
 
           gh release create $env:RELEASE_TAG @files `
               --repo $env:GITHUB_REPOSITORY `
@@ -330,3 +389,5 @@ jobs:
           }
 
           Write-Host "GR Taskbar $version published successfully."
+          Write-Host "Published existing build: $env:BUILD_RUN_ID"
+          Write-Host "No rebuilding or re-signing performed."
