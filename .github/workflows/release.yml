@@ -45,7 +45,6 @@ jobs:
               --workflow build.yml `
               --branch master `
               --status success `
-              --commit $env:GITHUB_SHA `
               --limit 100 `
               --json databaseId,headSha,conclusion |
               ConvertFrom-Json
@@ -82,7 +81,7 @@ jobs:
           }
 
           if (-not $selected) {
-              throw "No successful Release build with both architectures exists for this commit. Run build.yml first."
+              throw "No successful Release build with both unexpired architecture artifacts was found."
           }
 
           "run_id=$($selected.databaseId)" >> $env:GITHUB_OUTPUT
