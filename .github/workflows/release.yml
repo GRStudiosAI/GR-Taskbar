@@ -50,8 +50,7 @@ jobs:
               throw "Invalid build run ID."
           }
 
-          $json = gh api `
-              "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:BUILD_RUN_ID"
+          $json = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:BUILD_RUN_ID"
 
           if ($LASTEXITCODE -ne 0) {
               throw "Unable to retrieve GitHub build."
@@ -75,8 +74,7 @@ jobs:
               throw "Selected build belongs to another repository."
           }
 
-          $json = gh api `
-              "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:BUILD_RUN_ID/artifacts?per_page=100"
+          $json = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:BUILD_RUN_ID/artifacts?per_page=100"
 
           if ($LASTEXITCODE -ne 0) {
               throw "Unable to retrieve GitHub artifacts."
@@ -106,13 +104,35 @@ jobs:
           Write-Host "Using completed build $($run.id)"
           Write-Host "Original source commit: $($run.head_sha)"
 
+      - name: Validate authorized release tag
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          BUILD_SHA: ${{ steps.build.outputs.sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $tagCommit = gh api "repos/$env:GITHUB_REPOSITORY/commits/$env:RELEASE_TAG" --jq ".sha"
+
+          if ($LASTEXITCODE -ne 0) {
+              throw "Release tag $env:RELEASE_TAG must first be created by an authorized repository administrator at commit $env:BUILD_SHA."
+          }
+
+          if ($tagCommit -ne $env:BUILD_SHA) {
+              throw "Release tag does not match the original build commit."
+          }
+
+          Write-Host "Release tag verified: $env:RELEASE_TAG"
+          Write-Host "Release commit verified: $tagCommit"
+
       - name: Checkout original verification tools
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ steps.build.outputs.sha }}
           persist-credentials: false
 
-      - name: Download existing AMD64 release
+      - name: Retrieve existing AMD64 release artifact
         uses: actions/download-artifact@v7
         with:
           github-token: ${{ github.token }}
@@ -120,7 +140,7 @@ jobs:
           name: GR-Taskbar-Release-amd64-${{ steps.build.outputs.sha }}
           path: artifacts/amd64
 
-      - name: Download existing ARM64 release
+      - name: Retrieve existing ARM64 release artifact
         uses: actions/download-artifact@v7
         with:
           github-token: ${{ github.token }}
@@ -262,10 +282,6 @@ jobs:
                   throw "Artifact certificate does not match original build."
               }
 
-              # Reuse the original build's native Windows
-              # signature verification implementation.
-              # No signing or certificate installation occurs.
-
               $installerVerification = Test-GRSignature `
                   -Path (Resolve-Path "$src/$installer").Path `
                   -Thumbprint $expectedCertificate.Thumbprint `
@@ -300,8 +316,6 @@ jobs:
               if ([version]$actualVersion -ne $expectedVersion) {
                   throw "Installer version $actualVersion does not match $expectedVersion."
               }
-
-              Write-Host "Installer version verified successfully."
 
               Write-Host "$arch release artifacts verified successfully."
           }
@@ -357,7 +371,7 @@ jobs:
               Sort-Object Name |
               ForEach-Object {
                   "{0}  {1}" -f `
-                      (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(),
+                      (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), `
                       $_.Name
               } |
               Set-Content release/SHA256SUMS.txt -Encoding ascii
@@ -377,6 +391,12 @@ jobs:
 
           $version = $env:RELEASE_TAG.Substring(1)
 
+          $tagCommit = gh api "repos/$env:GITHUB_REPOSITORY/commits/$env:RELEASE_TAG" --jq ".sha"
+
+          if ($LASTEXITCODE -ne 0 -or $tagCommit -ne $env:BUILD_SHA) {
+              throw "Release tag verification failed."
+          }
+
           gh release view $env:RELEASE_TAG `
               --repo $env:GITHUB_REPOSITORY 2>$null
 
@@ -389,14 +409,18 @@ jobs:
                   ForEach-Object FullName
           )
 
+          if ($files.Count -ne 8) {
+              throw "Unexpected number of release assets: $($files.Count)"
+          }
+
           gh release create $env:RELEASE_TAG @files `
               --repo $env:GITHUB_REPOSITORY `
-              --target $env:BUILD_SHA `
+              --verify-tag `
               --title "GR Taskbar $version" `
               --generate-notes
 
           if ($LASTEXITCODE -ne 0) {
-              throw "GitHub release publication failed."
+              throw "GitHub release publication failed. Check effective workflow token permissions and repository release restrictions."
           }
 
           Write-Host "GR Taskbar $version published successfully."
