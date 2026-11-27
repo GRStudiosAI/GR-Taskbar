@@ -1,4 +1,4 @@
-﻿name: GR Taskbar - Automatic Changelog
+name: GR Taskbar - Automatic Changelog
 
 on:
   workflow_run:
@@ -407,6 +407,32 @@ jobs:
 
           $master | Set-Content CHANGELOG.md -Encoding utf8
 
+          # Normalize newly generated files before Git validation.
+          $generatedFiles = @(
+              "CHANGELOG.md",
+              "$folder/CHANGELOG.md",
+              "$folder/build-info.json",
+              $indexPath
+          )
+
+          foreach ($file in $generatedFiles) {
+              $fullPath = (Resolve-Path -LiteralPath $file).Path
+
+              $raw = [System.IO.File]::ReadAllText($fullPath)
+
+              $raw = $raw -replace "\r\n?", "`n"
+              $raw = $raw -replace "(?m)[ \t]+$", ""
+              $raw = $raw.TrimEnd([char[]]"`r`n") + "`n"
+
+              [System.IO.File]::WriteAllText(
+                  $fullPath,
+                  $raw,
+                  [System.Text.UTF8Encoding]::new($false)
+              )
+
+              Write-Host "Normalized generated file: $file"
+          }
+
           Invoke-Git -Arguments @(
               "config", "user.name", "github-actions[bot]"
           ) | Out-Null
@@ -420,9 +446,15 @@ jobs:
               "add", "--", "changelogs", "CHANGELOG.md"
           ) | Out-Null
 
-          Invoke-Git -Arguments @(
-              "diff", "--cached", "--check"
-          ) | Out-Null
+          Write-Host "Validating staged changelog files."
+
+          git diff --cached --check
+
+          if ($LASTEXITCODE -ne 0) {
+              throw "Generated changelog files failed Git whitespace validation. See diagnostics above."
+          }
+
+          Write-Host "Git whitespace validation passed."
 
           Invoke-Git -Arguments @(
               "commit", "-m",
