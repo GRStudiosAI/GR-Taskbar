@@ -22,26 +22,27 @@ concurrency:
 env:
   PRODUCT_NAME: GR Taskbar
   COMPANY_NAME: GR Studios AI LLC
-  BUILD_CONFIGURATION: ${{ inputs.configuration || 'Release' }}
+  BUILD_CONFIGURATION: ${{ inputs.configuration }}
 
 jobs:
   build:
-    name: Build GR Taskbar
+    name: Build and Sign GR Taskbar (${{ matrix.platform }})
+
+    if: github.repository == 'GRStudiosAI/GR-Taskbar' && github.ref == 'refs/heads/master'
+
     runs-on: windows-2025-vs2026
-    timeout-minutes: 60
+    timeout-minutes: 120
+
+    environment: release-signing
+
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - amd64
+          - arm64
 
     steps:
-      - name: Validate official repository
-        shell: pwsh
-        run: |
-          if ($env:GITHUB_REPOSITORY -ne "GRStudiosAI/GR-Taskbar") {
-              throw "Unauthorized repository."
-          }
-
-          Write-Host "GR Taskbar"
-          Write-Host "GR Studios AI LLC"
-          Write-Host "Where Imagination Meets Intelligence."
-
       - name: Checkout GR Taskbar
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
@@ -51,270 +52,199 @@ jobs:
       - name: Configure MSBuild
         uses: microsoft/setup-msbuild@v3
 
-      - name: Configure NuGet
-        shell: pwsh
+      - name: Validate build requirements
+        shell: powershell
         run: |
+          $ErrorActionPreference = "Stop"
+
           Get-Command nuget.exe -ErrorAction Stop
-          nuget help
 
-          if ($LASTEXITCODE -ne 0) {
-              throw "NuGet initialization failed."
-          }
-
-      - name: Validate source files
-        shell: pwsh
-        run: |
           $required = @(
               "GR-Taskbar.sln",
               "build.proj",
               "LICENSE",
-              "GR-Taskbar",
-              "gr_gui",
-              "gr_setup",
-              "gr_dwm",
-              "gr_startmenu",
-              "gr_starttiledata",
-              "GR-Taskbar-L10N",
-              "gr_extra",
-              "gr_extra_win7alttab",
               "gr_setup/MicrosoftPayload.targets",
+              "gr_setup/ValidateMicrosoftPayload.ps1",
+              "scripts/Build-GRTaskbar.ps1",
+              "scripts/ReleaseVerification.ps1",
+              "scripts/signing/GR-Taskbar-Public.cer",
               "BuildDependencies$env:BUILD_CONFIGURATION.bat"
           )
 
           foreach ($path in $required) {
               if (-not (Test-Path -LiteralPath $path)) {
-                  throw "Missing required component: $path"
+                  throw "Missing required file: $path"
               }
           }
 
-      - name: Restore project dependencies
-        shell: pwsh
-        run: |
-          nuget restore GR-Taskbar.sln
+          [xml]$targets = Get-Content `
+              "gr_setup/MicrosoftPayload.targets" -Raw
 
-          if ($LASTEXITCODE -ne 0) {
-              throw "NuGet restore failed."
+          $nodes = @(
+              $targets.SelectNodes(
+                  "//*[local-name()='GRMicrosoftPayload']"
+              )
+          )
+
+          if ($nodes.Count -ne 6) {
+              throw "Expected six Microsoft dependencies."
           }
 
-          nuget restore gr_starttiledata/gr_starttiledata.slnx
-
-          if ($LASTEXITCODE -ne 0) {
-              throw "StartTileData restore failed."
+          foreach ($node in $nodes) {
+              if ($node.ExpectedSHA256 -notmatch '^[A-Fa-f0-9]{64}$') {
+                  throw "Unpinned dependency: $($node.Category)"
+              }
           }
 
-      - name: Compile build dependencies
-        shell: cmd
+          Write-Host "All Microsoft dependencies are hash-pinned."
+
+      - name: Import GR Taskbar signing certificate
+        shell: powershell
+        env:
+          GR_SIGN_CERT_BASE64: ${{ secrets.GR_SIGN_CERT_BASE64 }}
+          GR_SIGN_CERT_PASSWORD: ${{ secrets.GR_SIGN_CERT_PASSWORD }}
+          GR_SIGN_CERT_THUMBPRINT: ${{ vars.GR_SIGN_CERT_THUMBPRINT }}
         run: |
-          call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+          $ErrorActionPreference = "Stop"
 
-          if errorlevel 1 exit /b 1
-          if not defined VSINSTALLDIR exit /b 1
+          if (-not $env:GR_SIGN_CERT_BASE64) {
+              throw "GR_SIGN_CERT_BASE64 is missing."
+          }
 
-          where cl.exe
-          if errorlevel 1 exit /b 1
+          if (-not $env:GR_SIGN_CERT_PASSWORD) {
+              throw "GR_SIGN_CERT_PASSWORD is missing."
+          }
 
-          where cmake.exe
-          if errorlevel 1 exit /b 1
+          $thumbprint = (
+              "$env:GR_SIGN_CERT_THUMBPRINT" -replace '\s',''
+          ).ToUpperInvariant()
 
-          if not exist "BuildDependencies%BUILD_CONFIGURATION%.bat" exit /b 1
+          if ($thumbprint -notmatch '^[A-F0-9]{40}$') {
+              throw "Invalid signing certificate thumbprint."
+          }
 
-          call "BuildDependencies%BUILD_CONFIGURATION%.bat"
+          $public = New-Object `
+              Security.Cryptography.X509Certificates.X509Certificate2(
+                  (Resolve-Path "scripts/signing/GR-Taskbar-Public.cer").Path
+              )
 
-          if errorlevel 1 exit /b 1
+          if ($public.Thumbprint -ne $thumbprint) {
+              throw "Public certificate thumbprint mismatch."
+          }
 
-      - name: Compile GR Taskbar
-        id: compile
-        shell: cmd
-        run: |
-          call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+          $pfx = Join-Path $env:RUNNER_TEMP "GR-Taskbar-Signing.pfx"
 
-          if errorlevel 1 exit /b 1
-          if not defined VSINSTALLDIR exit /b 1
+          try {
+              [IO.File]::WriteAllBytes(
+                  $pfx,
+                  [Convert]::FromBase64String(
+                      $env:GR_SIGN_CERT_BASE64
+                  )
+              )
 
-          msbuild build.proj /m /p:Configuration=%BUILD_CONFIGURATION% /verbosity:minimal /bl:GR-Taskbar-Build.binlog
+              $password = ConvertTo-SecureString `
+                  $env:GR_SIGN_CERT_PASSWORD `
+                  -AsPlainText -Force
 
-          if errorlevel 1 exit /b 1
+              Import-PfxCertificate `
+                  -FilePath $pfx `
+                  -CertStoreLocation "Cert:\CurrentUser\My" `
+                  -Password $password |
+                  Out-Null
 
-      - name: Diagnose Microsoft ARM64 payloads
-        if: failure() && steps.compile.outcome == 'failure'
+              $cert = Get-Item `
+                  "Cert:\CurrentUser\My\$thumbprint"
+
+              if (-not $cert.HasPrivateKey) {
+                  throw "Signing certificate has no private key."
+              }
+
+              if ($cert.NotAfter -le (Get-Date) -or
+                  $cert.NotBefore -gt (Get-Date)) {
+                  throw "Signing certificate is not current."
+              }
+
+              "GR_SIGN_CERT_THUMBPRINT=$thumbprint" |
+                  Out-File -FilePath $env:GITHUB_ENV `
+                      -Encoding utf8 -Append
+
+              Write-Host "Signing certificate imported successfully."
+          }
+          finally {
+              if (Test-Path -LiteralPath $pfx) {
+                  Remove-Item -LiteralPath $pfx -Force
+              }
+          }
+
+      - name: Build, sign and verify GR Taskbar
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
 
-          $cache = Join-Path $env:GITHUB_WORKSPACE "build\dependency-cache\ARM64"
-          $report = Join-Path $env:GITHUB_WORKSPACE "GR-Taskbar-ARM64-Diagnostics.txt"
+          & ".\scripts\Build-GRTaskbar.ps1" `
+              -Configuration $env:BUILD_CONFIGURATION `
+              -Platform "${{ matrix.platform }}" `
+              -SigningMode SelfSigned `
+              -CertificateThumbprint $env:GR_SIGN_CERT_THUMBPRINT
 
-          Write-Host "GR Taskbar Microsoft ARM64 dependency diagnostics"
-          Write-Host "Dependency cache: $cache"
-
-          if (-not (Test-Path -LiteralPath $cache)) {
-              $message = "ARM64 dependency cache does not exist."
-              Write-Warning $message
-              $message | Set-Content -LiteralPath $report -Encoding UTF8
-              exit 0
+          if (-not $?) {
+              throw "Signed build failed."
           }
 
-          $files = @(
-              Get-ChildItem -LiteralPath $cache -Recurse -File -Filter "*.dll"
+      - name: Validate signed output
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $output = "release-work/${{ matrix.platform }}/outputs"
+
+          $installer = if ("${{ matrix.platform }}" -eq "amd64") {
+              "GR-Taskbar-Setup.exe"
+          }
+          else {
+              "GR-Taskbar-Setup-ARM64.exe"
+          }
+
+          $required = @(
+              $installer,
+              "GR-Taskbar.cat",
+              "GR-Taskbar-Public.cer",
+              "GR-Taskbar-SIGNING-REPORT.json",
+              "SHA256SUMS.txt"
           )
 
-          if ($files.Count -eq 0) {
-              $message = "No Microsoft ARM64 DLLs found in the dependency cache."
-              Write-Warning $message
-              $message | Set-Content -LiteralPath $report -Encoding UTF8
-              exit 0
-          }
+          foreach ($name in $required) {
+              $file = Join-Path $output $name
 
-          $results = foreach ($file in $files) {
-              try {
-                  $sig = Get-AuthenticodeSignature -LiteralPath $file.FullName
-
-                  $hash = Get-FileHash `
-                      -LiteralPath $file.FullName `
-                      -Algorithm SHA256
-
-                  $bytes = [System.IO.File]::ReadAllBytes($file.FullName)
-
-                  $machine = "Invalid PE"
-                  $architecture = "Unknown"
-                  $validPE = $false
-
-                  if ($bytes.Length -ge 64) {
-                      $dosHeader = [BitConverter]::ToUInt16($bytes, 0)
-                      $offset = [BitConverter]::ToInt32($bytes, 60)
-
-                      if (
-                          $dosHeader -eq 0x5A4D -and
-                          $offset -ge 64 -and
-                          $offset -le ($bytes.Length - 24)
-                      ) {
-                          $peHeader = [BitConverter]::ToUInt32(
-                              $bytes,
-                              $offset
-                          )
-
-                          if ($peHeader -eq 17744) {
-                              $validPE = $true
-
-                              $machineValue = [BitConverter]::ToUInt16(
-                                  $bytes,
-                                  $offset + 4
-                              )
-
-                              $machine = "0x{0:X4}" -f $machineValue
-
-                              switch ($machineValue) {
-                                  0xAA64 {
-                                      $architecture = "ARM64"
-                                  }
-                                  0x8664 {
-                                      $architecture = "x64"
-                                  }
-                                  0x014C {
-                                      $architecture = "x86"
-                                  }
-                                  0xA641 {
-                                      $architecture = "ARM64EC"
-                                  }
-                                  0xA64E {
-                                      $architecture = "ARM64X"
-                                  }
-                                  default {
-                                      $architecture = "Unknown"
-                                  }
-                              }
-                          }
-                      }
-                  }
-
-                  $signer = if ($sig.SignerCertificate) {
-                      $sig.SignerCertificate.Subject
-                  } else {
-                      "No signer certificate returned"
-                  }
-
-                  $thumbprint = if ($sig.SignerCertificate) {
-                      $sig.SignerCertificate.Thumbprint
-                  } else {
-                      "Unavailable"
-                  }
-
-                  $microsoftSigner = (
-                      $null -ne $sig.SignerCertificate -and
-                      $signer -match '(?:^|,)\s*O\s*=\s*Microsoft Corporation\s*(?:,|$)'
-                  )
-
-                  $signaturePassed = (
-                      $sig.Status -eq "Valid" -and
-                      $microsoftSigner
-                  )
-
-                  [PSCustomObject]@{
-                      File = $file.FullName
-                      Size = $file.Length
-                      SHA256 = $hash.Hash
-                      ValidPE = $validPE
-                      Machine = $machine
-                      Architecture = $architecture
-                      ExpectedArchitecture = "ARM64"
-                      ArchitecturePassed = (
-                          $validPE -and
-                          $machine -eq "0xAA64"
-                      )
-                      SignatureStatus = $sig.Status
-                      SignatureStatusMessage = $sig.StatusMessage
-                      SignatureType = $sig.SignatureType
-                      Signer = $signer
-                      CertificateThumbprint = $thumbprint
-                      MicrosoftSigner = $microsoftSigner
-                      SignaturePassed = $signaturePassed
-                      Error = ""
-                  }
+              if (-not (Test-Path -LiteralPath $file)) {
+                  throw "Missing signed output: $file"
               }
-              catch {
-                  [PSCustomObject]@{
-                      File = $file.FullName
-                      Error = $_.Exception.Message
-                  }
+
+              if ((Get-Item -LiteralPath $file).Length -eq 0) {
+                  throw "Empty output file: $file"
               }
           }
 
-          $diagnostics = $results |
-              Format-List * |
-              Out-String -Width 4096
+          $report = Get-Content `
+              "$output/GR-Taskbar-SIGNING-REPORT.json" `
+              -Raw | ConvertFrom-Json
 
-          Write-Host $diagnostics
-
-          $diagnostics |
-              Set-Content -LiteralPath $report -Encoding UTF8
-
-          Write-Host "ARM64 dependency diagnostics completed."
-
-      - name: Inspect generated binaries
-        shell: pwsh
-        run: |
-          $output = "build/$env:BUILD_CONFIGURATION"
-
-          if (-not (Test-Path $output)) {
-              throw "Build output directory is missing."
+          if ($report.CatalogPayloadVerification -ne "Valid") {
+              throw "Payload catalog verification failed."
           }
 
-          $files = Get-ChildItem -LiteralPath $output -Recurse -File |
-              Where-Object {
-                  $_.Extension -in ".exe", ".dll"
-              }
-
-          if (-not $files) {
-              throw "No compiled binaries found."
+          if ($report.SigningMode -ne "SelfSigned") {
+              throw "Unexpected signing mode."
           }
 
-          $files | Select-Object FullName, Length
+          Get-ChildItem -LiteralPath $output -File |
+              Select-Object Name, Length
 
-      - name: Upload GR Taskbar build
+      - name: Upload signed GR Taskbar
         uses: actions/upload-artifact@v6
         with:
-          name: GR-Taskbar-${{ env.BUILD_CONFIGURATION }}-${{ github.sha }}
-          path: build/${{ env.BUILD_CONFIGURATION }}/
+          name: GR-Taskbar-${{ inputs.configuration }}-${{ matrix.platform }}-${{ github.sha }}
+          path: release-work/${{ matrix.platform }}/outputs/
           if-no-files-found: error
           retention-days: 14
 
@@ -322,9 +252,30 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: GR-Taskbar-Build-Diagnostics
+          name: GR-Taskbar-Diagnostics-${{ matrix.platform }}
           path: |
-            GR-Taskbar-Build.binlog
-            GR-Taskbar-ARM64-Diagnostics.txt
+            release-work/${{ matrix.platform }}/logs/
+            **/*.binlog
           if-no-files-found: ignore
           retention-days: 7
+
+      - name: Remove signing certificate
+        if: always()
+        shell: powershell
+        run: |
+          $thumbprint = "$env:GR_SIGN_CERT_THUMBPRINT"
+
+          if ($thumbprint -match '^[A-Fa-f0-9]{40}$') {
+              $path = "Cert:\CurrentUser\My\$thumbprint"
+
+              if (Test-Path -LiteralPath $path) {
+                  Remove-Item -LiteralPath $path `
+                      -DeleteKey -Force
+              }
+          }
+
+          $pfx = Join-Path $env:RUNNER_TEMP "GR-Taskbar-Signing.pfx"
+
+          if (Test-Path -LiteralPath $pfx) {
+              Remove-Item -LiteralPath $pfx -Force
+          }

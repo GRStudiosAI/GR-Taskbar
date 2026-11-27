@@ -1,110 +1,61 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-
   <!--
     GR Taskbar Microsoft Dependency Management
     GR Studios AI LLC
     Where Imagination Meets Intelligence.
   -->
-
   <ItemGroup Condition="'$(Platform)' == 'x64'">
-
     <GRMicrosoftPayload Include="$(MSBuildProjectDirectory)\..\build\dependency-cache\x64\pnidui\pnidui.dll">
       <Category>pnidui</Category>
       <SourceUrl>https://msdl.microsoft.com/download/symbols/pnidui.dll/F717CABC20B000/pnidui.dll</SourceUrl>
       <ExpectedSHA256>52E9C88CB50EF98E683839AB62880180F0DD3DB3E1C445EA461AE63D97A349D3</ExpectedSHA256>
       <ExpectedMachine>34404</ExpectedMachine>
     </GRMicrosoftPayload>
-
     <GRMicrosoftPayload Include="$(MSBuildProjectDirectory)\..\build\dependency-cache\x64\StartUI\StartUI.dll">
       <Category>StartUI</Category>
       <SourceUrl>https://msdl.microsoft.com/download/symbols/startui.dll/C1AEED44852000/startui.dll</SourceUrl>
       <ExpectedSHA256>715B75B289DD2EFC34FB0FFD924FCD38A34FEE9FC5E93A207FCADA7CB38F6508</ExpectedSHA256>
       <ExpectedMachine>34404</ExpectedMachine>
     </GRMicrosoftPayload>
-
     <GRMicrosoftPayload Include="$(MSBuildProjectDirectory)\..\build\dependency-cache\x64\JumpViewUI\JumpViewUI.dll">
       <Category>JumpViewUI</Category>
       <SourceUrl>https://msdl.microsoft.com/download/symbols/jumpviewui.dll/C814664216A000/jumpviewui.dll</SourceUrl>
       <ExpectedSHA256>3E81CECF171D697DBF08E97CDC0ED60158D6FB405E9897D54890CF20E35EF856</ExpectedSHA256>
       <ExpectedMachine>34404</ExpectedMachine>
     </GRMicrosoftPayload>
-
   </ItemGroup>
-
   <ItemGroup Condition="'$(Platform)' == 'ARM64'">
-
     <GRMicrosoftPayload Include="$(MSBuildProjectDirectory)\..\build\dependency-cache\ARM64\pnidui\pnidui.dll">
       <Category>pnidui</Category>
       <SourceUrl>https://msdl.microsoft.com/download/symbols/pnidui.dll/63AF842D210000/pnidui.dll</SourceUrl>
-      <ExpectedSHA256>UNPINNED</ExpectedSHA256>
+      <ExpectedSHA256>667D2F0E2F4536F1DE0A7DC578D31A89321B77AA1A9AF4EE17412CDED68A5A99</ExpectedSHA256>
       <ExpectedMachine>43620</ExpectedMachine>
     </GRMicrosoftPayload>
-
     <GRMicrosoftPayload Include="$(MSBuildProjectDirectory)\..\build\dependency-cache\ARM64\StartUI\StartUI.dll">
       <Category>StartUI</Category>
       <SourceUrl>https://msdl.microsoft.com/download/symbols/startui.dll/122A50F3AB9000/startui.dll</SourceUrl>
-      <ExpectedSHA256>UNPINNED</ExpectedSHA256>
+      <ExpectedSHA256>0180A9AFAC9BBB939FDFB18F00CE759F109EC9093CAA8A907A3CBDE3F3FE1A18</ExpectedSHA256>
       <ExpectedMachine>43620</ExpectedMachine>
     </GRMicrosoftPayload>
-
     <GRMicrosoftPayload Include="$(MSBuildProjectDirectory)\..\build\dependency-cache\ARM64\JumpViewUI\JumpViewUI.dll">
       <Category>JumpViewUI</Category>
       <SourceUrl>https://msdl.microsoft.com/download/symbols/jumpviewui.dll/45558FDB1E9000/jumpviewui.dll</SourceUrl>
-      <ExpectedSHA256>UNPINNED</ExpectedSHA256>
+      <ExpectedSHA256>5D99AF76C228A5D911D85870A5DE823B5FF477E33077AF107131B6A7B48A13BE</ExpectedSHA256>
       <ExpectedMachine>43620</ExpectedMachine>
     </GRMicrosoftPayload>
-
   </ItemGroup>
-
   <PropertyGroup>
     <GRMicrosoftValidationScript>$(MSBuildThisFileDirectory)ValidateMicrosoftPayload.ps1</GRMicrosoftValidationScript>
   </PropertyGroup>
-
-  <Target Name="AcquireGRMicrosoftPayload"
-          Condition="'$(Platform)' == 'x64' Or '$(Platform)' == 'ARM64'">
-
-    <Message
-      Importance="high"
-      Text="GR Taskbar: Acquiring Microsoft $(Platform) dependencies." />
-
-    <Error
-      Condition="!Exists('$(GRMicrosoftValidationScript)')"
-      Text="Microsoft dependency validation script is missing: $(GRMicrosoftValidationScript)" />
-
-    <MakeDir
-      Directories="@(GRMicrosoftPayload->'%(RootDir)%(Directory)')" />
-
-    <DownloadFile
-      SourceUrl="%(GRMicrosoftPayload.SourceUrl)"
-      DestinationFolder="%(GRMicrosoftPayload.RootDir)%(GRMicrosoftPayload.Directory)"
-      DestinationFileName="%(GRMicrosoftPayload.Filename)%(GRMicrosoftPayload.Extension)"
-      Condition="!Exists('%(GRMicrosoftPayload.Identity)')"
-      Retries="8"
-      RetryDelayMilliseconds="15000" />
-
-    <Error
-      Condition="!Exists('%(GRMicrosoftPayload.Identity)')"
-      Text="Required Microsoft dependency is missing: %(GRMicrosoftPayload.Identity)" />
-
-    <Message
-      Importance="high"
-      Text="GR Taskbar: Validating %(GRMicrosoftPayload.FullPath)" />
-
-    <Exec
-      Command="powershell.exe -NoLogo -NoProfile -NonInteractive -File &quot;$(GRMicrosoftValidationScript)&quot; -PayloadPath &quot;%(GRMicrosoftPayload.FullPath)&quot; -ExpectedMachine %(GRMicrosoftPayload.ExpectedMachine) -ExpectedSHA256 &quot;%(GRMicrosoftPayload.ExpectedSHA256)&quot;"
-      WorkingDirectory="$(MSBuildProjectDirectory)"
-      IgnoreExitCode="false"
-      StandardOutputImportance="High"
-      StandardErrorImportance="High" />
-
-    <Copy
-      SourceFiles="@(GRMicrosoftPayload)"
-      DestinationFiles="@(GRMicrosoftPayload->'$(MSBuildProjectDirectory)\..\build\$(Configuration)\$(Platform)\gr_setup_files\%(Category)\%(Filename)%(Extension)')" />
-
-    <Message
-      Importance="high"
-      Text="GR Taskbar: Microsoft $(Platform) dependencies successfully validated and staged." />
-
+  <Target Name="AcquireGRMicrosoftPayload" Condition="'$(Platform)' == 'x64' Or '$(Platform)' == 'ARM64'">
+    <Message Importance="high" Text="GR Taskbar: Acquiring Microsoft $(Platform) dependencies." />
+    <Error Condition="!Exists('$(GRMicrosoftValidationScript)')" Text="Microsoft dependency validation script is missing: $(GRMicrosoftValidationScript)" />
+    <MakeDir Directories="@(GRMicrosoftPayload-&gt;'%(RootDir)%(Directory)')" />
+    <DownloadFile SourceUrl="%(GRMicrosoftPayload.SourceUrl)" DestinationFolder="%(GRMicrosoftPayload.RootDir)%(GRMicrosoftPayload.Directory)" DestinationFileName="%(GRMicrosoftPayload.Filename)%(GRMicrosoftPayload.Extension)" Condition="!Exists('%(GRMicrosoftPayload.Identity)')" Retries="8" RetryDelayMilliseconds="15000" />
+    <Error Condition="!Exists('%(GRMicrosoftPayload.Identity)')" Text="Required Microsoft dependency is missing: %(GRMicrosoftPayload.Identity)" />
+    <Message Importance="high" Text="GR Taskbar: Validating %(GRMicrosoftPayload.FullPath)" />
+    <Exec Command="powershell.exe -NoLogo -NoProfile -NonInteractive -File &quot;$(GRMicrosoftValidationScript)&quot; -PayloadPath &quot;%(GRMicrosoftPayload.FullPath)&quot; -ExpectedMachine %(GRMicrosoftPayload.ExpectedMachine) -ExpectedSHA256 &quot;%(GRMicrosoftPayload.ExpectedSHA256)&quot;" WorkingDirectory="$(MSBuildProjectDirectory)" IgnoreExitCode="false" StandardOutputImportance="High" StandardErrorImportance="High" />
+    <Copy SourceFiles="@(GRMicrosoftPayload)" DestinationFiles="@(GRMicrosoftPayload-&gt;'$(MSBuildProjectDirectory)\..\build\$(Configuration)\$(Platform)\gr_setup_files\%(Category)\%(Filename)%(Extension)')" />
+    <Message Importance="high" Text="GR Taskbar: Microsoft $(Platform) dependencies successfully validated and staged." />
   </Target>
-
 </Project>
