@@ -381,9 +381,9 @@
       <GRCursorFile Include="..\GR-Taskbar\resources\Cursors\**\*.cur;..\GR-Taskbar\resources\Cursors\**\*.ani;..\GR-Taskbar\resources\Cursors\**\*.grcursors" />
     </ItemGroup>
     <Copy SourceFiles="@(GRCursorFile)" DestinationFiles="@(GRCursorFile->'..\build\$(Configuration)\$(Platform)\gr_setup_files\Cursors\%(RecursiveDir)%(Filename)%(Extension)')" />
-    <ZipDirectory SourceDirectory="..\build\$(Configuration)\$(Platform)\gr_setup_files" DestinationFile="..\build\$(Configuration)\$(Platform)\ep_setup_files.zip" Overwrite="true" />
-    <EncryptFile OutputFile="..\build\$(Configuration)\$(Platform)\ep_setup_files.zip" EncryptionKey="$(ZipEncryptionKey)" Condition="'$(WithEncryption)' == 'true'" />
-    <Copy SourceFiles="..\build\$(Configuration)\$(Platform)\ep_setup_files.zip" DestinationFiles="..\build\$(Configuration)\$(Platform)\ep_setup_files.zip.bin" Condition="'$(WithEncryption)' != 'true'" />
+    <ZipDirectory SourceDirectory="..\build\$(Configuration)\$(Platform)\gr_setup_files" DestinationFile="..\build\$(Configuration)\$(Platform)\gr_setup_files.zip" Overwrite="true" />
+    <EncryptFile OutputFile="..\build\$(Configuration)\$(Platform)\gr_setup_files.zip" EncryptionKey="$(ZipEncryptionKey)" Condition="'$(WithEncryption)' == 'true'" />
+    <Copy SourceFiles="..\build\$(Configuration)\$(Platform)\gr_setup_files.zip" DestinationFiles="..\build\$(Configuration)\$(Platform)\gr_setup_files.zip.bin" Condition="'$(WithEncryption)' != 'true'" />
   </Target>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

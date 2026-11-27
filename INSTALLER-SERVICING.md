@@ -3,8 +3,8 @@
 ## What “1377” meant
 
 The former dialog appended `g_uFailureLine`, set by the `CHECK_OK` macro using
-`__LINE__` in `gr_setup/ep_setup.c`. The English text came from
-`gr_setup/resources/lang/ep_setup.en-US.rc`, `IDS_SETUP_FAILED`. Thus 1377 was a
+`__LINE__` in `gr_setup/gr_setup.c`. The English text came from
+`gr_setup/resources/lang/gr_setup.en-US.rc`, `IDS_SETUP_FAILED`. Thus 1377 was a
 build-dependent source checkpoint, not Windows error 1377 and not proof of a
 particular locked backup. The original build did not preserve its failing native
 error or path. That historical native error cannot be recovered from the photo.

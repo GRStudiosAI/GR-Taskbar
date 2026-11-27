@@ -991,7 +991,7 @@ int WINAPI wWinMain(
         }
     }
 
-    CreateEventW(NULL, FALSE, FALSE, _T(EP_SETUP_EVENTNAME));
+    CreateEventW(NULL, FALSE, FALSE, _T(GR_SETUP_EVENTNAME));
 
     SHGetFolderPathW(NULL, SPECIAL_FOLDER, NULL, SHGFP_TYPE_CURRENT, wszPath);
     wcscat_s(wszPath, MAX_PATH, _T(APP_RELATIVE_PATH));

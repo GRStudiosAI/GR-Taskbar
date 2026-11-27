@@ -1503,7 +1503,7 @@ DWORD WINAPI epw_Weather_MainThread(EPWeather* _this)
             {
                 printf("[General] Client has died.\n");
 
-                if (OpenEventW(READ_CONTROL, FALSE, _T(EP_SETUP_EVENTNAME)))
+                if (OpenEventW(READ_CONTROL, FALSE, _T(GR_SETUP_EVENTNAME)))
                 {
                     printf("[General] Servicing is in progress, terminating...\n");
                     TerminateProcess(GetCurrentProcess(), 0);

@@ -94,11 +94,11 @@ END
 
 #if defined(PLATFORM_AMD64)
 
-IDR_EP_ZIP              RCDATA             "..\\build\\Debug\\x64\\ep_setup_files.zip.bin"
+IDR_EP_ZIP              RCDATA             "..\\build\\Debug\\x64\\gr_setup_files.zip.bin"
 
 #elif defined(PLATFORM_ARM64)
 
-IDR_EP_ZIP              RCDATA             "..\\build\\Debug\\ARM64\\ep_setup_files.zip.bin"
+IDR_EP_ZIP              RCDATA             "..\\build\\Debug\\ARM64\\gr_setup_files.zip.bin"
 
 #endif
 

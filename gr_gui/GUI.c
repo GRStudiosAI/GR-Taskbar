@@ -1770,7 +1770,7 @@ static BOOL GUI_Build(HDC hDC, HWND hwnd, POINT pt)
                                     HANDLE hEvent = NULL;
                                     if (GetAsyncKeyState(VK_SHIFT))
                                     {
-                                        hEvent = CreateEventW(NULL, FALSE, FALSE, _T(EP_SETUP_EVENTNAME));
+                                        hEvent = CreateEventW(NULL, FALSE, FALSE, _T(GR_SETUP_EVENTNAME));
                                     }
                                     WCHAR wszPath[MAX_PATH];
                                     ZeroMemory(wszPath, MAX_PATH * sizeof(WCHAR));
@@ -3339,7 +3339,8 @@ static BOOL GUI_Build(HDC hDC, HWND hwnd, POINT pt)
             HGDIOBJ previousFont = SelectObject(hdcPaint, titleFont);
             SetBkMode(hdcPaint, TRANSPARENT);
             SetTextColor(hdcPaint, g_darkModeEnabled ? RGB(234, 241, 252) : RGB(23, 38, 58));
-            RECT heading = { dwLeftPad + 24 * dx, 10 * dy, rc.right - 36 * dx, 35 * dy };
+            // Footer parsing resets dwLeftPad. Anchor the header to the sidebar instead.
+            RECT heading = { _this->padding.left + _this->sidebarWidth + _this->padding.right + 24 * dx, 10 * dy, rc.right - 36 * dx, 35 * dy };
             if (_this->section < ARRAYSIZE(_this->sectionNames))
                 DrawTextW(hdcPaint, _this->sectionNames[_this->section], -1, &heading, DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
             headerFont.lfHeight = -MulDiv(12, (int)dpiY, 96);

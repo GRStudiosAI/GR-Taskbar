@@ -21,8 +21,8 @@
 #endif
 #define TOAST_BUFSIZ 1536
 #define SEH_REGPATH "Control Panel\\Quick Actions\\Control Center\\QuickActionsStateCapture\\GR-Taskbar"
-#define EP_SETUP_HELPER_SWITCH "/CreateExplorerShellUnelevatedAfterServicing"
+#define GR_SETUP_HELPER_SWITCH "/CreateExplorerShellUnelevatedAfterServicing"
 #define EP_DWM_SERVICENAME "ep_dwm_" EP_CLSID_LITE
 #define EP_DWM_EVENTNAME "Global\\ep_dwm_2_" EP_CLSID_LITE
-#define EP_SETUP_EVENTNAME "Global\\ep_setup_" EP_CLSID_LITE
+#define GR_SETUP_EVENTNAME "Global\\gr_setup_" EP_CLSID_LITE
 #endif
